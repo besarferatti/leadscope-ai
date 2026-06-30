@@ -105,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [normalizeProfile]);
 
   const loadProfile = useCallback(async (authUser: User) => {
+    console.log('[AuthContext] profile loading starts', { userId: authUser.id });
     setProfileLoading(true);
     setProfileError(null);
     try {
@@ -128,9 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(updated);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load your profile.';
+      console.log('[AuthContext] profile error', { userId: authUser.id, error: message });
       setProfile(null);
       setProfileError(message);
     } finally {
+      console.log('[AuthContext] profile loading ends', { userId: authUser.id });
       setProfileLoading(false);
     }
   }, [createDefaultProfile, normalizeProfile]);
@@ -141,23 +144,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Failsafe: if profile load takes too long, unblock the spinner anyway
-    const failsafe = setTimeout(() => setLoading(false), 8000);
+    const failsafe = setTimeout(() => {
+      console.log('[AuthContext] setLoading(false) runs', { source: 'failsafe' });
+      setLoading(false);
+    }, 8000);
 
     // getSession handles token refresh reliably — use it for the initial state
+    console.log('[AuthContext] getSession starts');
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[AuthContext] getSession returns', { sessionExists: Boolean(session), userId: session?.user?.id ?? null });
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user).finally(() => {
           clearTimeout(failsafe);
+          console.log('[AuthContext] setLoading(false) runs', { source: 'getSession profile finally' });
           setLoading(false);
         });
       } else {
         clearTimeout(failsafe);
+        console.log('[AuthContext] setLoading(false) runs', { source: 'getSession no session' });
         setLoading(false);
       }
-    }).catch(() => {
+    }).catch((error) => {
+      console.log('[AuthContext] getSession error', { error: error instanceof Error ? error.message : error });
       clearTimeout(failsafe);
+      console.log('[AuthContext] setLoading(false) runs', { source: 'getSession catch' });
       setLoading(false);
     });
 

@@ -59,18 +59,32 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const bulkAllowed = canUseBulkActions(profile);
 
   useEffect(() => {
+    console.log('[LeadsPage] component mounted');
+    console.log('[LeadsPage] user id value', { userId: user?.id ?? null });
     loadData();
   }, []);
 
   async function loadData() {
+    console.log('[LeadsPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
     const [leadsRes, searchesRes] = await Promise.all([
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
     ]);
-    if (leadsRes.error) setError(leadsRes.error.message);
-    else setLeads(leadsRes.data ?? []);
+    if (leadsRes.error) {
+      console.log('[LeadsPage] query error', { source: 'leads', error: leadsRes.error.message });
+      setError(leadsRes.error.message);
+    } else {
+      console.log('[LeadsPage] query success', { source: 'leads', count: leadsRes.data?.length ?? 0 });
+      setLeads(leadsRes.data ?? []);
+    }
+    if (searchesRes.error) {
+      console.log('[LeadsPage] query error', { source: 'searches', error: searchesRes.error.message });
+    } else {
+      console.log('[LeadsPage] query success', { source: 'searches', count: searchesRes.data?.length ?? 0 });
+    }
     setSearches((searchesRes.data as unknown as LeadSearch[]) ?? []);
+    console.log('[LeadsPage] finally setLoading(false)');
     setLoading(false);
   }
 
