@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/plans';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { formatDate } from '../../lib/utils';
 
 interface AuditRow {
@@ -25,18 +26,41 @@ export function AdminAudits() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
-      const [auditsRes, leadsRes, usersRes] = await Promise.all([
-        supabase.from('lead_audits').select('*').order('created_at', { ascending: false }),
-        supabase.from('leads').select('id, business_name'),
-        supabase.from('user_profiles').select('id, email'),
-      ]);
-      setAudits(auditsRes.data ?? []);
-      setLeads((leadsRes.data ?? []) as LeadRow[]);
-      setUsers((usersRes.data ?? []) as UserProfile[]);
-      setLoading(false);
+      setLoading(true);
+      setError('');
+
+      try {
+        const [auditsRes, leadsRes] = await Promise.all([
+          supabase.from('lead_audits').select('*').order('created_at', { ascending: false }),
+          supabase.from('leads').select('id, business_name'),
+        ]);
+
+        if (auditsRes.error) throw auditsRes.error;
+        if (leadsRes.error) throw leadsRes.error;
+
+        const auditRows = (auditsRes.data ?? []) as AuditRow[];
+        const userIds = [...new Set(auditRows.map(a => a.user_id).filter(Boolean))];
+        const usersRes = userIds.length
+          ? await supabase.from('user_profiles').select('id, email').in('id', userIds)
+          : { data: [], error: null };
+
+        if (usersRes.error) setError(usersRes.error.message);
+
+        setAudits(auditRows);
+        setLeads((leadsRes.data ?? []) as LeadRow[]);
+        setUsers((usersRes.data ?? []) as UserProfile[]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load audits.');
+        setAudits([]);
+        setLeads([]);
+        setUsers([]);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -63,6 +87,9 @@ export function AdminAudits() {
         <h1 className="text-2xl font-bold text-white">AI Audits</h1>
         <p className="text-slate-400 text-sm mt-1">{audits.length} total audits</p>
       </div>
+
+      {error && <ErrorAlert message={error} onClose={() => setError('')} />}
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

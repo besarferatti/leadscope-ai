@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/plans';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { formatDate } from '../../lib/utils';
 
 interface MessageRow {
@@ -24,18 +25,41 @@ export function AdminMessages() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
-      const [messagesRes, leadsRes, usersRes] = await Promise.all([
-        supabase.from('outreach_messages').select('*').order('created_at', { ascending: false }),
-        supabase.from('leads').select('id, business_name'),
-        supabase.from('user_profiles').select('id, email'),
-      ]);
-      setMessages(messagesRes.data ?? []);
-      setLeads((leadsRes.data ?? []) as LeadRow[]);
-      setUsers((usersRes.data ?? []) as UserProfile[]);
-      setLoading(false);
+      setLoading(true);
+      setError('');
+
+      try {
+        const [messagesRes, leadsRes] = await Promise.all([
+          supabase.from('outreach_messages').select('*').order('created_at', { ascending: false }),
+          supabase.from('leads').select('id, business_name'),
+        ]);
+
+        if (messagesRes.error) throw messagesRes.error;
+        if (leadsRes.error) throw leadsRes.error;
+
+        const messageRows = (messagesRes.data ?? []) as MessageRow[];
+        const userIds = [...new Set(messageRows.map(m => m.user_id).filter(Boolean))];
+        const usersRes = userIds.length
+          ? await supabase.from('user_profiles').select('id, email').in('id', userIds)
+          : { data: [], error: null };
+
+        if (usersRes.error) setError(usersRes.error.message);
+
+        setMessages(messageRows);
+        setLeads((leadsRes.data ?? []) as LeadRow[]);
+        setUsers((usersRes.data ?? []) as UserProfile[]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load messages.');
+        setMessages([]);
+        setLeads([]);
+        setUsers([]);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -56,6 +80,9 @@ export function AdminMessages() {
         <h1 className="text-2xl font-bold text-white">Outreach Messages</h1>
         <p className="text-slate-400 text-sm mt-1">{messages.length} total messages generated</p>
       </div>
+
+      {error && <ErrorAlert message={error} onClose={() => setError('')} />}
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
