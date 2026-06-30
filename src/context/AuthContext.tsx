@@ -257,6 +257,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     fullName?: string
   ): Promise<{ error: string | null }> => {
+    const blockedDisposableDomains = new Set([
+      'mailinator.com',
+      'tempmail.com',
+      '10minutemail.com',
+      'guerrillamail.com',
+      'yopmail.com',
+      'fakeinbox.com',
+      'trashmail.com',
+      'getnada.com',
+      'dispostable.com',
+    ]);
+    const emailDomain = email.trim().toLowerCase().split('@').pop();
+
+    if (emailDomain && blockedDisposableDomains.has(emailDomain)) {
+      return {
+        error:
+          'Disposable email addresses are not allowed. Please use a real business or personal email.',
+      };
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
