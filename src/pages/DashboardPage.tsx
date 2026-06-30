@@ -80,30 +80,70 @@ export function DashboardPage({ onNavigate }: Props) {
   async function load() {
     setLoading(true);
     setError(null);
+
+    const stopLoadingFailsafe = setTimeout(() => {
+      setError('Dashboard data loading timed out.');
+      setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
+      setRecentLeads([]);
+      setRecentSearches([]);
+      setLoading(false);
+    }, 8000);
+
     try {
-      const [leadsRes, searchesRes] = await withTimeout(
-        Promise.all([
+      const [leadsResult, searchesResult] = await Promise.allSettled([
+        withTimeout(
           supabase.from('leads').select('*').order('created_at', { ascending: false }),
+          8000,
+          'Leads loading timed out.'
+        ),
+        withTimeout(
           supabase.from('lead_searches').select('*').order('created_at', { ascending: false }).limit(5),
-        ]),
-        8000,
-        'Dashboard data loading timed out.'
-      );
+          8000,
+          'Searches loading timed out.'
+        ),
+      ]);
 
-      if (leadsRes.error) throw leadsRes.error;
-      if (searchesRes.error) throw searchesRes.error;
+      const errors: string[] = [];
+      let leads: Lead[] = [];
+      let searches: LeadSearch[] = [];
 
-      const leads: Lead[] = leadsRes.data ?? [];
-      const searches: LeadSearch[] = searchesRes.data ?? [];
+      if (leadsResult.status === 'fulfilled') {
+        if (leadsResult.value.error) {
+          errors.push(leadsResult.value.error.message);
+        } else {
+          leads = leadsResult.value.data ?? [];
+        }
+      } else {
+        errors.push(leadsResult.reason instanceof Error ? leadsResult.reason.message : 'Unable to load leads.');
+      }
+
+      if (searchesResult.status === 'fulfilled') {
+        if (searchesResult.value.error) {
+          errors.push(searchesResult.value.error.message);
+        } else {
+          searches = searchesResult.value.data ?? [];
+        }
+      } else {
+        errors.push(searchesResult.reason instanceof Error ? searchesResult.reason.message : 'Unable to load searches.');
+      }
+
       const totalLeads = leads.length;
       const avgScore = totalLeads ? Math.round(leads.reduce((a, l) => a + (l.lead_score || 0), 0) / totalLeads) : 0;
 
       setStats({ totalLeads, totalSearches: searches.length, avgScore, interestedLeads: leads.filter(l => l.status === 'Interested').length });
       setRecentLeads(leads.slice(0, 5));
       setRecentSearches(searches);
+
+      if (errors.length > 0) {
+        setError(errors.join(' '));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
+      setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
+      setRecentLeads([]);
+      setRecentSearches([]);
     } finally {
+      clearTimeout(stopLoadingFailsafe);
       setLoading(false);
     }
   }
@@ -113,20 +153,6 @@ export function DashboardPage({ onNavigate }: Props) {
   }, [user?.id]);
 
   if (loading) return <LoadingSpinner message="Loading dashboard..." />;
-
-  if (error) {
-    return (
-      <div className="rounded-2xl bg-slate-900 border border-red-500/30 p-6 text-center">
-        <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-4" />
-        <h1 className="text-xl font-semibold text-white mb-2">Dashboard couldn't load</h1>
-        <p className="text-slate-400 text-sm mb-5">{error}</p>
-        <button onClick={load} className="btn btn-primary inline-flex items-center gap-2">
-          <RefreshCw className="w-4 h-4" />
-          Retry
-        </button>
-      </div>
-    );
-  }
 
   const statCards = [
     { label: 'Total Leads', value: stats.totalLeads, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
@@ -161,6 +187,20 @@ export function DashboardPage({ onNavigate }: Props) {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/25">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-red-300 font-medium text-sm">Dashboard data couldn't load completely.</p>
+            <p className="text-red-400/70 text-xs mt-0.5">{error}</p>
+          </div>
+          <button onClick={load} className="btn-primary text-xs py-1.5 flex-shrink-0 inline-flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Trial / expired banners */}
       {!admin && trialExpired && (
