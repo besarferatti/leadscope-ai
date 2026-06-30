@@ -22,6 +22,20 @@ interface Props {
   initialSearchId?: string;
 }
 
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 const defaultForm = {
   business_name: '',
   industry: '',
@@ -64,14 +78,66 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
   async function loadData() {
     setLoading(true);
-    const [leadsRes, searchesRes] = await Promise.all([
-      supabase.from('leads').select('*').order('created_at', { ascending: false }),
-      supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
-    ]);
-    if (leadsRes.error) setError(leadsRes.error.message);
-    else setLeads(leadsRes.data ?? []);
-    setSearches((searchesRes.data as unknown as LeadSearch[]) ?? []);
-    setLoading(false);
+    setError('');
+
+    const loadingFailsafe = setTimeout(() => {
+      setLeads([]);
+      setSearches([]);
+      setError('Leads loading timed out.');
+      setLoading(false);
+    }, 8000);
+
+    try {
+      const [leadsResult, searchesResult] = await Promise.allSettled([
+        withTimeout(
+          supabase.from('leads').select('*').order('created_at', { ascending: false }),
+          8000,
+          'Leads loading timed out.'
+        ),
+        withTimeout(
+          supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
+          8000,
+          'Search filters loading timed out.'
+        ),
+      ]);
+
+      const errors: string[] = [];
+
+      if (leadsResult.status === 'fulfilled') {
+        if (leadsResult.value.error) {
+          errors.push(leadsResult.value.error.message);
+          setLeads([]);
+        } else {
+          setLeads(leadsResult.value.data ?? []);
+        }
+      } else {
+        errors.push(leadsResult.reason instanceof Error ? leadsResult.reason.message : 'Unable to load leads.');
+        setLeads([]);
+      }
+
+      if (searchesResult.status === 'fulfilled') {
+        if (searchesResult.value.error) {
+          errors.push(searchesResult.value.error.message);
+          setSearches([]);
+        } else {
+          setSearches((searchesResult.value.data as unknown as LeadSearch[]) ?? []);
+        }
+      } else {
+        errors.push(searchesResult.reason instanceof Error ? searchesResult.reason.message : 'Unable to load search filters.');
+        setSearches([]);
+      }
+
+      if (errors.length > 0) {
+        setError(errors.join(' '));
+      }
+    } catch (err) {
+      setLeads([]);
+      setSearches([]);
+      setError(err instanceof Error ? err.message : 'Unable to load leads.');
+    } finally {
+      clearTimeout(loadingFailsafe);
+      setLoading(false);
+    }
   }
 
   async function handleAddLead(e: React.FormEvent) {

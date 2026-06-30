@@ -17,6 +17,20 @@ interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 const defaultForm = {
   niche: '',
   location: '',
@@ -48,13 +62,37 @@ export function LeadSearchesPage({ onNavigate }: Props) {
 
   async function loadSearches() {
     setLoading(true);
-    const { data, error: err } = await supabase
-      .from('lead_searches')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (err) setError(err.message);
-    else setSearches(data ?? []);
-    setLoading(false);
+    setError('');
+
+    const loadingFailsafe = setTimeout(() => {
+      setSearches([]);
+      setError('Searches loading timed out.');
+      setLoading(false);
+    }, 8000);
+
+    try {
+      const { data, error: err } = await withTimeout(
+        supabase
+          .from('lead_searches')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        8000,
+        'Searches loading timed out.'
+      );
+
+      if (err) {
+        setSearches([]);
+        setError(err.message);
+      } else {
+        setSearches(data ?? []);
+      }
+    } catch (err) {
+      setSearches([]);
+      setError(err instanceof Error ? err.message : 'Unable to load searches.');
+    } finally {
+      clearTimeout(loadingFailsafe);
+      setLoading(false);
+    }
   }
 
   async function handleCreate(e: React.FormEvent) {

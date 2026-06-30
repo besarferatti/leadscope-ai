@@ -81,11 +81,11 @@ export function DashboardPage({ onNavigate }: Props) {
     setLoading(true);
     setError(null);
 
-    const stopLoadingFailsafe = setTimeout(() => {
-      setError('Dashboard data loading timed out.');
+    const loadingFailsafe = setTimeout(() => {
       setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
       setRecentLeads([]);
       setRecentSearches([]);
+      setError('Dashboard data loading timed out.');
       setLoading(false);
     }, 8000);
 
@@ -138,12 +138,15 @@ export function DashboardPage({ onNavigate }: Props) {
         setError(errors.join(' '));
       }
     } catch (err) {
+      setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
+      setRecentLeads([]);
+      setRecentSearches([]);
       setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
       setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
       setRecentLeads([]);
       setRecentSearches([]);
     } finally {
-      clearTimeout(stopLoadingFailsafe);
+      clearTimeout(loadingFailsafe);
       setLoading(false);
     }
   }
