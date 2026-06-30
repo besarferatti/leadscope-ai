@@ -111,7 +111,7 @@ export function DashboardPage({ onNavigate }: Props) {
 
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [recentSearches, setRecentSearches] = useState<LeadSearch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, set] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const admin = isAdmin(profile);
@@ -122,10 +122,10 @@ export function DashboardPage({ onNavigate }: Props) {
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
 
   async function load() {
-    setLoading(true);
+    set(true);
     setError(null);
 
-    const loadingFailsafe = setTimeout(() => {
+    const Failsafe = setTimeout(() => {
       setStats({
         totalLeads: 0,
         totalSearches: 0,
@@ -134,8 +134,8 @@ export function DashboardPage({ onNavigate }: Props) {
       });
       setRecentLeads([]);
       setRecentSearches([]);
-      setError('Dashboard data loading timed out.');
-      setLoading(false);
+      setError('Dashboard data  timed out.');
+      set(false);
     }, 8000);
 
     try {
@@ -143,7 +143,7 @@ export function DashboardPage({ onNavigate }: Props) {
         withTimeout(
           supabase.from('leads').select('*').order('created_at', { ascending: false }),
           8000,
-          'Leads loading timed out.'
+          'Leads  timed out.'
         ),
         withTimeout(
           supabase
@@ -152,7 +152,7 @@ export function DashboardPage({ onNavigate }: Props) {
             .order('created_at', { ascending: false })
             .limit(5),
           8000,
-          'Searches loading timed out.'
+          'Searches  timed out.'
         ),
       ]);
 
@@ -221,8 +221,8 @@ export function DashboardPage({ onNavigate }: Props) {
       setRecentLeads([]);
       setRecentSearches([]);
     } finally {
-      clearTimeout(loadingFailsafe);
-      setLoading(false);
+      clearTimeout(Failsafe);
+      set(false);
     }
   }
 
@@ -230,7 +230,35 @@ export function DashboardPage({ onNavigate }: Props) {
     void load();
   }, [user?.id]);
 
-  if (loading) return <LoadingSpinner message="TEST DASHBOARD LOADING 123" />;
+  if (loading) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <p className="text-slate-400 text-sm mt-1">Loading dashboard data...</p>
+      </div>
+
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/25">
+        <LoadingSpinner message="" />
+        <div>
+          <p className="text-blue-300 font-medium text-sm">Loading dashboard data...</p>
+          <p className="text-blue-400/70 text-xs mt-0.5">
+            If this takes too long, refresh or continue using the menu.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {['Total Leads', 'Lead Searches', 'Avg. Lead Score', 'Interested'].map((label) => (
+          <div key={label} className="card p-5">
+            <p className="text-slate-400 text-sm">{label}</p>
+            <p className="text-3xl font-bold text-white mt-3">0</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
   const statCards = [
     {
