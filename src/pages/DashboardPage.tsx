@@ -142,6 +142,9 @@ export function DashboardPage({ onNavigate }: Props) {
       setRecentLeads([]);
       setRecentSearches([]);
       setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
+      setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
+      setRecentLeads([]);
+      setRecentSearches([]);
     } finally {
       clearTimeout(loadingFailsafe);
       setLoading(false);
