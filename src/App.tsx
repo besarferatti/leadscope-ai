@@ -344,10 +344,15 @@ function AppInner() {
 
   // Admin route — only admins
   if (ADMIN_PAGES.includes(page)) {
+    if (profileLoading) {
+      return <LoadingSpinner message="Loading account..." />;
+    }
+
     if (profile?.role === 'admin') {
       return <AdminPage onNavigate={navigate} adminPage={pageParams.admin_page ?? 'overview'} />;
     }
-    return <LoadingSpinner message="Loading dashboard..." />;
+
+    return <DashboardPage onNavigate={navigate} />;
   }
 
   // Show plan picker for free trial users (once per session, not for admins)

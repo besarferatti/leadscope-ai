@@ -17,6 +17,20 @@ interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
+}
+
 const defaultForm = {
   niche: '',
   location: '',
@@ -43,17 +57,26 @@ export function LeadSearchesPage({ onNavigate }: Props) {
   const [findState, setFindState] = useState<Record<string, FindLeadsState>>({});
 
   useEffect(() => {
+    console.log('[LeadSearchesPage] component mounted');
+    console.log('[LeadSearchesPage] user id value', { userId: user?.id ?? null });
     loadSearches();
   }, []);
 
   async function loadSearches() {
+    console.log('[LeadSearchesPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
     const { data, error: err } = await supabase
       .from('lead_searches')
       .select('*')
       .order('created_at', { ascending: false });
-    if (err) setError(err.message);
-    else setSearches(data ?? []);
+    if (err) {
+      console.log('[LeadSearchesPage] query error', { error: err.message });
+      setError(err.message);
+    } else {
+      console.log('[LeadSearchesPage] query success', { count: data?.length ?? 0 });
+      setSearches(data ?? []);
+    }
+    console.log('[LeadSearchesPage] finally setLoading(false)');
     setLoading(false);
   }
 
