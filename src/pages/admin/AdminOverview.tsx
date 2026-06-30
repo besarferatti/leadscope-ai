@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Users, Search, FileText, MessageSquare, TrendingUp, UserCheck, UserX, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Users, Search, FileText, MessageSquare, TrendingUp, UserCheck, Zap } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 

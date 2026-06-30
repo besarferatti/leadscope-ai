@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/plans';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';

@@ -14,7 +14,6 @@ import {
   getStripePriceId,
 } from '../lib/plans';
 import { createCheckoutSession, createPortalSession } from '../lib/stripe';
-import { ChangePasswordPage } from './ChangePasswordPage';
 
 type Tab = 'profile' | 'api-keys' | 'billing' | 'security';
 

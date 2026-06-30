@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { RefreshCw, UserX, UserCheck, Trash2, Shield, Key, ChevronDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw, UserX, UserCheck, Trash2, Key, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';

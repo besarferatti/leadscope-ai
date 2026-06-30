@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, X } from 'lucide-react';
 import { PLANS, PLAN_DISPLAY_ORDER } from '../../lib/plans';
 

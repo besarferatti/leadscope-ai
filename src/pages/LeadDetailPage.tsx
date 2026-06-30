@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink,
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
