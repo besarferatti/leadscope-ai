@@ -270,6 +270,10 @@ function AppInner() {
     );
   }
 
+  if (profileLoading) {
+    return <LoadingSpinner message="Loading account..." />;
+  }
+
   // Must change password check
   if (profile?.must_change_password && page !== 'change-password') {
     return (
