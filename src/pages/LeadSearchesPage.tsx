@@ -57,42 +57,27 @@ export function LeadSearchesPage({ onNavigate }: Props) {
   const [findState, setFindState] = useState<Record<string, FindLeadsState>>({});
 
   useEffect(() => {
+    console.log('[LeadSearchesPage] component mounted');
+    console.log('[LeadSearchesPage] user id value', { userId: user?.id ?? null });
     loadSearches();
   }, []);
 
   async function loadSearches() {
+    console.log('[LeadSearchesPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
-    setError('');
-
-    const loadingFailsafe = setTimeout(() => {
-      setSearches([]);
-      setError('Searches loading timed out.');
-      setLoading(false);
-    }, 8000);
-
-    try {
-      const { data, error: err } = await withTimeout(
-        supabase
-          .from('lead_searches')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        8000,
-        'Searches loading timed out.'
-      );
-
-      if (err) {
-        setSearches([]);
-        setError(err.message);
-      } else {
-        setSearches(data ?? []);
-      }
-    } catch (err) {
-      setSearches([]);
-      setError(err instanceof Error ? err.message : 'Unable to load searches.');
-    } finally {
-      clearTimeout(loadingFailsafe);
-      setLoading(false);
+    const { data, error: err } = await supabase
+      .from('lead_searches')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (err) {
+      console.log('[LeadSearchesPage] query error', { error: err.message });
+      setError(err.message);
+    } else {
+      console.log('[LeadSearchesPage] query success', { count: data?.length ?? 0 });
+      setSearches(data ?? []);
     }
+    console.log('[LeadSearchesPage] finally setLoading(false)');
+    setLoading(false);
   }
 
   async function handleCreate(e: React.FormEvent) {

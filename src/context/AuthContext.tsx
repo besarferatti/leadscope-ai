@@ -99,6 +99,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updated_at: now.toISOString(),
       };
 
+    const { data, error } = await withTimeout(
+      supabase
+        .from('user_profiles')
+        .upsert(defaultProfile, { onConflict: 'id', ignoreDuplicates: true })
+        .select('*')
+        .maybeSingle(),
+      7000,
+      'Profile creation timed out.'
+    );
+
+    if (error) throw error;
+    return normalizeProfile((data ?? defaultProfile) as UserProfile);
+  }, [normalizeProfile]);
+
+  const loadProfile = useCallback(async (authUser: User) => {
+    console.log('[AuthContext] profile loading starts', { userId: authUser.id });
+    setProfileLoading(true);
+    setProfileError(null);
+    try {
       const { data, error } = await withTimeout(
         supabase
           .from('user_profiles')
@@ -116,42 +135,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [normalizeProfile]
   );
 
-  const loadProfile = useCallback(
-    async (authUser: User) => {
-      setProfileLoading(true);
-      setProfileError(null);
-
-      try {
-        const { data, error } = await withTimeout(
-          supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', authUser.id)
-            .maybeSingle(),
-          7000,
-          'Profile loading timed out.'
-        );
-
-        if (error) throw error;
-
-        const loadedProfile = data
-          ? normalizeProfile(data as UserProfile)
-          : await createDefaultProfile(authUser);
-
-        const updated = await resetUsageIfNeeded(loadedProfile);
-        setProfile(updated);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to load your profile.';
-
-        setProfile(null);
-        setProfileError(message);
-      } finally {
-        setProfileLoading(false);
-      }
-    },
-    [createDefaultProfile, normalizeProfile]
-  );
+      const updated = await resetUsageIfNeeded(loadedProfile);
+      setProfile(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load your profile.';
+      console.log('[AuthContext] profile error', { userId: authUser.id, error: message });
+      setProfile(null);
+      setProfileError(message);
+    } finally {
+      console.log('[AuthContext] profile loading ends', { userId: authUser.id });
+      setProfileLoading(false);
+    }
+  }, [createDefaultProfile, normalizeProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (userRef.current) {
@@ -160,30 +155,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile]);
 
   useEffect(() => {
+    // Failsafe: if profile load takes too long, unblock the spinner anyway
     const failsafe = setTimeout(() => {
+      console.log('[AuthContext] setLoading(false) runs', { source: 'failsafe' });
       setLoading(false);
     }, 8000);
 
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          loadProfile(session.user).finally(() => {
-            clearTimeout(failsafe);
-            setLoading(false);
-          });
-        } else {
+    // getSession handles token refresh reliably — use it for the initial state
+    console.log('[AuthContext] getSession starts');
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[AuthContext] getSession returns', { sessionExists: Boolean(session), userId: session?.user?.id ?? null });
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user).finally(() => {
           clearTimeout(failsafe);
+          console.log('[AuthContext] setLoading(false) runs', { source: 'getSession profile finally' });
           setLoading(false);
         }
       })
       .catch(() => {
         clearTimeout(failsafe);
+        console.log('[AuthContext] setLoading(false) runs', { source: 'getSession no session' });
         setLoading(false);
-      });
+      }
+    }).catch((error) => {
+      console.log('[AuthContext] getSession error', { error: error instanceof Error ? error.message : error });
+      clearTimeout(failsafe);
+      console.log('[AuthContext] setLoading(false) runs', { source: 'getSession catch' });
+      setLoading(false);
+    });
 
     // onAuthStateChange handles all subsequent events (sign-in, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {

@@ -73,71 +73,33 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const bulkAllowed = canUseBulkActions(profile);
 
   useEffect(() => {
+    console.log('[LeadsPage] component mounted');
+    console.log('[LeadsPage] user id value', { userId: user?.id ?? null });
     loadData();
   }, []);
 
   async function loadData() {
+    console.log('[LeadsPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
-    setError('');
-
-    const loadingFailsafe = setTimeout(() => {
-      setLeads([]);
-      setSearches([]);
-      setError('Leads loading timed out.');
-      setLoading(false);
-    }, 8000);
-
-    try {
-      const [leadsResult, searchesResult] = await Promise.allSettled([
-        withTimeout(
-          supabase.from('leads').select('*').order('created_at', { ascending: false }),
-          8000,
-          'Leads loading timed out.'
-        ),
-        withTimeout(
-          supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
-          8000,
-          'Search filters loading timed out.'
-        ),
-      ]);
-
-      const errors: string[] = [];
-
-      if (leadsResult.status === 'fulfilled') {
-        if (leadsResult.value.error) {
-          errors.push(leadsResult.value.error.message);
-          setLeads([]);
-        } else {
-          setLeads(leadsResult.value.data ?? []);
-        }
-      } else {
-        errors.push(leadsResult.reason instanceof Error ? leadsResult.reason.message : 'Unable to load leads.');
-        setLeads([]);
-      }
-
-      if (searchesResult.status === 'fulfilled') {
-        if (searchesResult.value.error) {
-          errors.push(searchesResult.value.error.message);
-          setSearches([]);
-        } else {
-          setSearches((searchesResult.value.data as unknown as LeadSearch[]) ?? []);
-        }
-      } else {
-        errors.push(searchesResult.reason instanceof Error ? searchesResult.reason.message : 'Unable to load search filters.');
-        setSearches([]);
-      }
-
-      if (errors.length > 0) {
-        setError(errors.join(' '));
-      }
-    } catch (err) {
-      setLeads([]);
-      setSearches([]);
-      setError(err instanceof Error ? err.message : 'Unable to load leads.');
-    } finally {
-      clearTimeout(loadingFailsafe);
-      setLoading(false);
+    const [leadsRes, searchesRes] = await Promise.all([
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
+    ]);
+    if (leadsRes.error) {
+      console.log('[LeadsPage] query error', { source: 'leads', error: leadsRes.error.message });
+      setError(leadsRes.error.message);
+    } else {
+      console.log('[LeadsPage] query success', { source: 'leads', count: leadsRes.data?.length ?? 0 });
+      setLeads(leadsRes.data ?? []);
     }
+    if (searchesRes.error) {
+      console.log('[LeadsPage] query error', { source: 'searches', error: searchesRes.error.message });
+    } else {
+      console.log('[LeadsPage] query success', { source: 'searches', count: searchesRes.data?.length ?? 0 });
+    }
+    setSearches((searchesRes.data as unknown as LeadSearch[]) ?? []);
+    console.log('[LeadsPage] finally setLoading(false)');
+    setLoading(false);
   }
 
   async function handleAddLead(e: React.FormEvent) {

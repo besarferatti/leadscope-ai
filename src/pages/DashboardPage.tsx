@@ -78,6 +78,7 @@ export function DashboardPage({ onNavigate }: Props) {
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
 
   async function load() {
+    console.log('[DashboardPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
     setError(null);
 
@@ -90,8 +91,9 @@ export function DashboardPage({ onNavigate }: Props) {
     }, 8000);
 
     try {
-      const [leadsResult, searchesResult] = await Promise.allSettled([
-        withTimeout(
+      console.log('[DashboardPage] Supabase query started');
+      const [leadsRes, searchesRes] = await withTimeout(
+        Promise.all([
           supabase.from('leads').select('*').order('created_at', { ascending: false }),
           8000,
           'Leads loading timed out.'
@@ -117,15 +119,15 @@ export function DashboardPage({ onNavigate }: Props) {
         errors.push(leadsResult.reason instanceof Error ? leadsResult.reason.message : 'Unable to load leads.');
       }
 
-      if (searchesResult.status === 'fulfilled') {
-        if (searchesResult.value.error) {
-          errors.push(searchesResult.value.error.message);
-        } else {
-          searches = searchesResult.value.data ?? [];
-        }
-      } else {
-        errors.push(searchesResult.reason instanceof Error ? searchesResult.reason.message : 'Unable to load searches.');
+      if (leadsRes.error) {
+        console.log('[DashboardPage] Supabase query error', { source: 'leads', error: leadsRes.error.message });
+        throw leadsRes.error;
       }
+      if (searchesRes.error) {
+        console.log('[DashboardPage] Supabase query error', { source: 'searches', error: searchesRes.error.message });
+        throw searchesRes.error;
+      }
+      console.log('[DashboardPage] Supabase query success', { leads: leadsRes.data?.length ?? 0, searches: searchesRes.data?.length ?? 0 });
 
       const totalLeads = leads.length;
       const avgScore = totalLeads ? Math.round(leads.reduce((a, l) => a + (l.lead_score || 0), 0) / totalLeads) : 0;
@@ -138,20 +140,23 @@ export function DashboardPage({ onNavigate }: Props) {
         setError(errors.join(' '));
       }
     } catch (err) {
-      setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
-      setRecentLeads([]);
-      setRecentSearches([]);
+      console.log('[DashboardPage] Supabase query error', { error: err instanceof Error ? err.message : err });
       setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
       setStats({ totalLeads: 0, totalSearches: 0, avgScore: 0, interestedLeads: 0 });
       setRecentLeads([]);
       setRecentSearches([]);
     } finally {
-      clearTimeout(loadingFailsafe);
+      console.log('[DashboardPage] finally setLoading(false)');
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    console.log('[DashboardPage] component mounted');
+  }, []);
+
+  useEffect(() => {
+    console.log('[DashboardPage] user id value', { userId: user?.id ?? null });
     load();
   }, [user?.id]);
 
