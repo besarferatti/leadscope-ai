@@ -25,8 +25,6 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState('');
-  const [verificationMessage, setVerificationMessage] = useState('');
 
   function switchMode(m: 'login' | 'register') {
     setMode(m);
@@ -51,10 +49,7 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
       }
       const { error: err } = await signUp(email, password, fullName.trim());
       if (err) setError(err);
-      else {
-        setVerificationEmail(email);
-        setVerificationMessage('Check your inbox for a verification link before signing in.');
-      }
+      else onSuccess();
     }
     setLoading(false);
   }
@@ -69,44 +64,6 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
     if (err) setError(err.message);
     else setForgotSent(true);
     setLoading(false);
-  }
-
-
-  async function handleResendVerification() {
-    if (!verificationEmail) return;
-    setLoading(true);
-    setError('');
-    setVerificationMessage('');
-    const { error: err } = await supabase.auth.resend({ type: 'signup', email: verificationEmail });
-    if (err) setError(err.message);
-    else setVerificationMessage('Verification email sent. Please check your inbox.');
-    setLoading(false);
-  }
-
-  if (verificationEmail) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-        <div className="w-full max-w-sm">
-          <div className="card p-8 text-center">
-            <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-            <h2 className="text-white font-bold text-xl mb-2">Verify your email</h2>
-            <p className="text-slate-400 text-sm mb-4">
-              We sent a verification link to <span className="text-slate-200">{verificationEmail}</span>. Verify your email before accessing your dashboard.
-            </p>
-            {verificationMessage && <p className="text-emerald-400 text-sm mb-4">{verificationMessage}</p>}
-            {error && <ErrorAlert message={error} onClose={() => setError('')} />}
-            <div className="space-y-3">
-              <button onClick={handleResendVerification} disabled={loading} className="btn-primary w-full">
-                {loading ? 'Sending...' : 'Resend verification email'}
-              </button>
-              <button onClick={() => { setVerificationEmail(''); switchMode('login'); }} className="btn-secondary w-full">
-                Back to Sign In
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   if (mode === 'forgot-password') {

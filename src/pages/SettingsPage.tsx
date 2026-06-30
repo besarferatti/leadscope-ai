@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Key, Building2, Globe, Save, CheckCircle, AlertTriangle,
+  Key, Building2, Globe, Save, Eye, EyeOff, CheckCircle, AlertTriangle,
   User, CreditCard, Shield, BarChart3, MessageSquare, Users as UsersIcon,
   TrendingUp, Clock, Zap,
 } from 'lucide-react';
@@ -18,6 +18,8 @@ import { createCheckoutSession, createPortalSession } from '../lib/stripe';
 type Tab = 'profile' | 'api-keys' | 'billing' | 'security';
 
 interface ApiKeySettings {
+  openai_api_key: string;
+  google_places_api_key: string;
   agency_name: string;
   agency_website: string;
   default_language: string;
@@ -25,6 +27,8 @@ interface ApiKeySettings {
 }
 
 const defaults: ApiKeySettings = {
+  openai_api_key: '',
+  google_places_api_key: '',
   agency_name: '',
   agency_website: '',
   default_language: 'English',
@@ -68,6 +72,8 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [showOpenAI, setShowOpenAI] = useState(false);
+  const [showPlaces, setShowPlaces] = useState(false);
   const [upgradingTo, setUpgradingTo] = useState<PlanId | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
@@ -86,6 +92,8 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
       const { data } = await supabase.from('user_settings').select('*').maybeSingle();
       if (data) {
         setApiSettings({
+          openai_api_key: data.openai_api_key ?? '',
+          google_places_api_key: data.google_places_api_key ?? '',
           agency_name: data.agency_name ?? '',
           agency_website: data.agency_website ?? '',
           default_language: data.default_language ?? 'English',
@@ -122,14 +130,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     setError('');
     const { error: err } = await supabase
       .from('user_settings')
-      .upsert({
-        id: user!.id,
-        agency_name: apiSettings.agency_name,
-        agency_website: apiSettings.agency_website,
-        default_language: apiSettings.default_language,
-        default_tone: apiSettings.default_tone,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'id' });
+      .upsert({ id: user!.id, ...apiSettings, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (err) setError(err.message);
     else showSaved();
     setSaving(false);
@@ -184,7 +185,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">Manage your account, managed AI services, billing, and security.</p>
+        <p className="text-slate-400 text-sm mt-1">Manage your account, API keys, billing, and security.</p>
       </div>
 
       <div className="flex flex-wrap gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl w-fit">
@@ -260,15 +261,36 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
               <h2 className="text-white font-semibold">API Keys</h2>
             </div>
             <div className="space-y-4">
-              <div className="flex items-start gap-2.5 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-blue-200 text-sm font-medium">API keys are managed securely by LeadScope AI.</p>
-                  <p className="text-blue-200/70 text-xs leading-relaxed mt-1">
-                    OpenAI and Google Places requests run through server-side functions. You never need to enter or store personal API keys in the browser.
-                  </p>
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-1.5">
+                  OpenAI API Key
+                  <span className="ml-2 text-xs text-amber-400 font-normal">Required for audits & messages</span>
+                </label>
+                <div className="relative">
+                  <input type={showOpenAI ? 'text' : 'password'} className="input pr-10" placeholder="sk-..." value={apiSettings.openai_api_key} onChange={e => setApiSettings(p => ({ ...p, openai_api_key: e.target.value }))} />
+                  <button type="button" onClick={() => setShowOpenAI(!showOpenAI)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    {showOpenAI ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-1.5">
+                  Google Places API Key
+                  <span className="ml-2 text-xs text-slate-500 font-normal">For lead searches</span>
+                </label>
+                <div className="relative">
+                  <input type={showPlaces ? 'text' : 'password'} className="input pr-10" placeholder="AIza..." value={apiSettings.google_places_api_key} onChange={e => setApiSettings(p => ({ ...p, google_places_api_key: e.target.value }))} />
+                  <button type="button" onClick={() => setShowPlaces(!showPlaces)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    {showPlaces ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-amber-200/70 text-xs leading-relaxed">
+                API keys are stored securely in your private account and never shared.
+              </p>
             </div>
           </div>
           <div className="card p-6">
