@@ -11,7 +11,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { formatDate, getSearchStatusColor, LANGUAGES } from '../lib/utils';
-import { canGenerateLead, isAdmin } from '../lib/plans';
+import { canGenerateLead, isAdmin, incrementUsage } from '../lib/plans';
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
@@ -45,7 +45,7 @@ interface FindLeadsState {
 }
 
 export function LeadSearchesPage({ onNavigate }: Props) {
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [searches, setSearches] = useState<LeadSearch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -149,7 +149,9 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       const inserted = json.inserted ?? 0;
       const skipped = json.skipped ?? 0;
 
-      if (inserted > 0 && !isAdmin(profile)) {
+      // Increment usage
+      if (inserted > 0 && user && !isAdmin(profile)) {
+        await incrementUsage(user.id, 'leads', inserted);
         await refreshProfile();
       }
 

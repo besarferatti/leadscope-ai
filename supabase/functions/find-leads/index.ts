@@ -18,22 +18,6 @@ function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
 
-function isAdmin(profile: { role?: string } | null) {
-  return profile?.role === "admin";
-}
-
-function leadLimit(plan: string | null | undefined) {
-  switch (plan) {
-    case "starter": return 500;
-    case "pro": return 2500;
-    case "agency": return 10000;
-    case "enterprise": return -1;
-    case "admin_unlimited": return -1;
-    case "free_trial":
-    default: return 50;
-  }
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -66,29 +50,21 @@ Deno.serve(async (req: Request) => {
       return errorResponse("search_id, niche, and location are required");
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("role,current_plan,leads_used_this_month,is_active")
+    // Fetch the user's Google Places API key from their settings
+    const { data: settings, error: settingsError } = await supabase
+      .from("user_settings")
+      .select("google_places_api_key")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      return errorResponse("Unable to load account profile", 500);
-    }
-    if (!profile.is_active) {
-      return errorResponse("Your account is inactive. Please contact support.", 403);
-    }
-    if (!isAdmin(profile)) {
-      const limit = leadLimit(profile.current_plan);
-      if (limit !== -1 && (profile.leads_used_this_month ?? 0) >= limit) {
-        return errorResponse("You've reached your monthly lead limit. Upgrade your plan to continue generating more leads.", 402);
-      }
+    if (settingsError) {
+      return errorResponse("Failed to load user settings", 500);
     }
 
-    const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
+    const apiKey = (settings as { google_places_api_key?: string } | null)?.google_places_api_key?.trim();
 
     if (!apiKey) {
-      return errorResponse("Google Places is not configured on the server.", 500);
+      return errorResponse("Google Places API key is missing. Add it in Settings.", 422);
     }
 
     // Call Google Places Text Search API
@@ -246,25 +222,13 @@ Deno.serve(async (req: Request) => {
       existingNameAddress.add(nameAddr);
     }
 
-    const allowedToInsert = isAdmin(profile)
-      ? toInsert
-      : toInsert.slice(0, Math.max(0, leadLimit(profile.current_plan) - (profile.leads_used_this_month ?? 0)));
-    skipped += toInsert.length - allowedToInsert.length;
-
     let inserted = 0;
-    if (allowedToInsert.length > 0) {
-      const { error: insertError } = await supabase.from("leads").insert(allowedToInsert);
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from("leads").insert(toInsert);
       if (insertError) {
         return errorResponse(`Failed to save leads: ${insertError.message}`, 500);
       }
-      inserted = allowedToInsert.length;
-    }
-
-    if (inserted > 0 && !isAdmin(profile)) {
-      await supabase
-        .from("user_profiles")
-        .update({ leads_used_this_month: (profile.leads_used_this_month ?? 0) + inserted, updated_at: new Date().toISOString() })
-        .eq("id", user.id);
+      inserted = toInsert.length;
     }
 
     // Update search status to completed
