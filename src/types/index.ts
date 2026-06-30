@@ -65,8 +65,6 @@ export interface OutreachMessage {
 }
 
 export interface UserSettings {
-  openai_api_key?: string;
-  google_places_api_key?: string;
   agency_name?: string;
   agency_website?: string;
   default_language?: string;

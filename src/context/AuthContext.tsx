@@ -18,6 +18,21 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  'mailinator.com',
+  'tempmail.com',
+  '10minutemail.com',
+  'guerrillamail.com',
+  'yopmail.com',
+  'fakeinbox.com',
+  'trashmail.com',
+  'getnada.com',
+  'dispostable.com',
+]);
+
+const DISPOSABLE_EMAIL_ERROR = 'Disposable email addresses are not allowed. Please use a real business or personal email.';
+
+
 async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
@@ -198,6 +213,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName?: string): Promise<{ error: string | null }> => {
+    const domain = email.trim().toLowerCase().split('@')[1] ?? '';
+    if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
+      return { error: DISPOSABLE_EMAIL_ERROR };
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,

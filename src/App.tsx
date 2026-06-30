@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, X, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, X, ArrowRight, Loader2, AlertCircle, Mail } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
@@ -33,6 +33,51 @@ type AppPage =
 const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'settings', 'change-password'];
+
+
+function VerifyEmailScreen() {
+  const { session, signOut } = useAuth();
+  const [resending, setResending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const email = session?.user.email ?? '';
+
+  async function handleResend() {
+    if (!email) return;
+    setResending(true);
+    setMessage('');
+    setError('');
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    });
+    if (resendError) setError(resendError.message);
+    else setMessage('Verification email sent. Please check your inbox.');
+    setResending(false);
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+      <div className="max-w-md w-full card p-8 text-center">
+        <div className="w-12 h-12 rounded-xl bg-blue-500/15 flex items-center justify-center mx-auto mb-5">
+          <Mail className="w-6 h-6 text-blue-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Verify your email</h1>
+        <p className="text-slate-400 text-sm leading-relaxed mb-5">
+          Please verify <span className="text-slate-200">{email}</span> before accessing LeadScope AI. This keeps your account secure.
+        </p>
+        {message && <p className="text-emerald-400 text-sm mb-4">{message}</p>}
+        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button onClick={handleResend} disabled={resending || !email} className="btn-primary">
+            {resending ? 'Sending...' : 'Resend verification email'}
+          </button>
+          <button onClick={() => signOut()} className="btn-secondary">Sign out</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
   const { profile } = useAuth();
@@ -268,6 +313,12 @@ function AppInner() {
         </div>
       </div>
     );
+  }
+
+  const emailVerified = Boolean(session.user.email_confirmed_at);
+  const adminBypass = profile?.role === 'admin' || session.user.email?.toLowerCase() === 'admin@leadscope.pro';
+  if (!emailVerified && !adminBypass) {
+    return <VerifyEmailScreen />;
   }
 
   // Must change password check
