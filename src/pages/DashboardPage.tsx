@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Users, Search, TrendingUp, Star, ArrowRight, Plus, Shield,
-  AlertTriangle, Clock, BarChart3, Zap, MessageSquare,
+  AlertTriangle, Clock, BarChart3, Zap, MessageSquare, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,19 @@ import {
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
+}
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
 }
 
 interface Stats {
@@ -55,6 +68,7 @@ export function DashboardPage({ onNavigate }: Props) {
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [recentSearches, setRecentSearches] = useState<LeadSearch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const admin = isAdmin(profile);
   const limits = getPlanLimits(profile);
@@ -63,30 +77,56 @@ export function DashboardPage({ onNavigate }: Props) {
   const planName = profile ? (PLANS[profile.current_plan]?.name ?? profile.current_plan) : '';
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [leadsRes, searchesRes] = await Promise.all([
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [leadsRes, searchesRes] = await withTimeout(
+        Promise.all([
           supabase.from('leads').select('*').order('created_at', { ascending: false }),
           supabase.from('lead_searches').select('*').order('created_at', { ascending: false }).limit(5),
-        ]);
+        ]),
+        8000,
+        'Dashboard data loading timed out.'
+      );
 
-        const leads: Lead[] = leadsRes.data ?? [];
-        const searches: LeadSearch[] = searchesRes.data ?? [];
-        const totalLeads = leads.length;
-        const avgScore = totalLeads ? Math.round(leads.reduce((a, l) => a + (l.lead_score || 0), 0) / totalLeads) : 0;
+      if (leadsRes.error) throw leadsRes.error;
+      if (searchesRes.error) throw searchesRes.error;
 
-        setStats({ totalLeads, totalSearches: searches.length, avgScore, interestedLeads: leads.filter(l => l.status === 'Interested').length });
-        setRecentLeads(leads.slice(0, 5));
-        setRecentSearches(searches);
-      } finally {
-        setLoading(false);
-      }
+      const leads: Lead[] = leadsRes.data ?? [];
+      const searches: LeadSearch[] = searchesRes.data ?? [];
+      const totalLeads = leads.length;
+      const avgScore = totalLeads ? Math.round(leads.reduce((a, l) => a + (l.lead_score || 0), 0) / totalLeads) : 0;
+
+      setStats({ totalLeads, totalSearches: searches.length, avgScore, interestedLeads: leads.filter(l => l.status === 'Interested').length });
+      setRecentLeads(leads.slice(0, 5));
+      setRecentSearches(searches);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     load();
-  }, [user]);
+  }, [user?.id]);
 
   if (loading) return <LoadingSpinner message="Loading dashboard..." />;
+
+  if (error) {
+    return (
+      <div className="rounded-2xl bg-slate-900 border border-red-500/30 p-6 text-center">
+        <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-4" />
+        <h1 className="text-xl font-semibold text-white mb-2">Dashboard couldn't load</h1>
+        <p className="text-slate-400 text-sm mb-5">{error}</p>
+        <button onClick={load} className="btn btn-primary inline-flex items-center gap-2">
+          <RefreshCw className="w-4 h-4" />
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   const statCards = [
     { label: 'Total Leads', value: stats.totalLeads, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },

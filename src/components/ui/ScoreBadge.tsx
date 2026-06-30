@@ -1,4 +1,3 @@
-import React from 'react';
 import { getScoreColor, getScoreBg } from '../../lib/utils';
 
 interface Props {

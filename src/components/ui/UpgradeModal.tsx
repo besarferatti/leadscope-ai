@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, TrendingUp, ArrowRight } from 'lucide-react';
 
 interface Props {

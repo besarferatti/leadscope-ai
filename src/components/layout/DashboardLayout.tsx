@@ -1,14 +1,14 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 
 interface Props {
   currentPage: string;
   onNavigate: (page: string, params?: Record<string, string>) => void;
-  children: React.ReactNode;
+  children: ReactNode;
   pageTitle?: string;
 }
 
-export function DashboardLayout({ currentPage, onNavigate, children, pageTitle }: Props) {
+export function DashboardLayout({ currentPage, onNavigate, children }: Props) {
   return (
     <div className="flex min-h-screen bg-slate-950">
       <Sidebar currentPage={currentPage} onNavigate={onNavigate} />

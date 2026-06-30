@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, X, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
@@ -104,7 +104,7 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
 }
 
 function AppInner() {
-  const { session, loading, profile, profileLoading, refreshProfile } = useAuth();
+  const { session, loading, profile, profileLoading, profileError, refreshProfile } = useAuth();
   const [page, setPage] = useState<AppPage>('dashboard');
   const [pageParams, setPageParams] = useState<Record<string, string>>({});
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -145,6 +145,17 @@ function AppInner() {
       // portal=return: silently refresh profile in the background (no spinner needed)
     }
   }, []);
+
+
+  useEffect(() => {
+    if (loading || !session) return;
+    if (PUBLIC_PAGES.includes(page) || (!DASH_PAGES.includes(page) && !ADMIN_PAGES.includes(page) && page !== 'change-password')) {
+      setPage('dashboard');
+    }
+    if (ADMIN_PAGES.includes(page) && profile && profile.role !== 'admin') {
+      setPage('dashboard');
+    }
+  }, [loading, session, page, profile?.role]);
 
   // Fallback: auth finished loading but no session — can't sync, clear the activating screen
   useEffect(() => {
@@ -241,9 +252,22 @@ function AppInner() {
     );
   }
 
-  // Authenticated — redirect away from public pages
-  if (PUBLIC_PAGES.includes(page)) {
-    setPage('dashboard');
+  // Authenticated pages are normalized by the redirect effect above.
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl bg-slate-900 border border-red-500/30 p-6 text-center">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-4" />
+          <h1 className="text-xl font-semibold text-white mb-2">We couldn't load your account</h1>
+          <p className="text-slate-400 text-sm mb-5">{profileError}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => refreshProfile()} className="btn btn-primary" disabled={profileLoading}>Retry</button>
+            <button onClick={() => window.location.reload()} className="btn btn-secondary">Reload</button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Must change password check
@@ -269,11 +293,10 @@ function AppInner() {
 
   // Admin route — only admins
   if (ADMIN_PAGES.includes(page)) {
-    if (profile?.role !== 'admin') {
-      setPage('dashboard');
-    } else {
+    if (profile?.role === 'admin') {
       return <AdminPage onNavigate={navigate} adminPage={pageParams.admin_page ?? 'overview'} />;
     }
+    return <LoadingSpinner message="Loading dashboard..." />;
   }
 
   // Show plan picker for free trial users (once per session, not for admins)
@@ -307,9 +330,6 @@ function AppInner() {
     }
   };
 
-  if (!DASH_PAGES.includes(page)) {
-    setPage('dashboard');
-  }
 
   return (
     <DashboardLayout currentPage={activePage} onNavigate={navigate}>

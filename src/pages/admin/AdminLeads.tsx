@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2, ChevronRight, Search, X, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { Lead, LeadStatus } from '../../types';
+import { Lead } from '../../types';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { StatusBadge } from '../../components/ui/StatusBadge';

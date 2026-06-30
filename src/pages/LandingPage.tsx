@@ -1,6 +1,5 @@
-import React from 'react';
 import {
-  Crosshair, Search, Star, MessageSquare, Download, BarChart3,
+  Crosshair, Search, MessageSquare, Download, BarChart3,
   ArrowRight, CheckCircle, Zap, Target, Globe,
 } from 'lucide-react';
 

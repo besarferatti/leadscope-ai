@@ -40,7 +40,7 @@ const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] =
 ];
 
 export function AdminPage({ onNavigate, adminPage }: Props) {
-  const { user, profile, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [section, setSection] = useState<AdminSection>((adminPage as AdminSection) ?? 'overview');
   const [mobileOpen, setMobileOpen] = useState(false);
 
