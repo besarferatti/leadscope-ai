@@ -230,7 +230,7 @@ export function DashboardPage({ onNavigate }: Props) {
     void load();
   }, [user?.id]);
 
-  if (loading) return <LoadingSpinner message="Loading dashboard..." />;
+  if (loading) return <LoadingSpinner message="TEST DASHBOARD LOADING 123" />;
 
   const statCards = [
     {
