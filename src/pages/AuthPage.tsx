@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { trackEvent } from '../lib/analytics';
+import { getStoredReferralCode } from '../lib/referrals';
 
 type Mode = 'login' | 'register' | 'forgot-password';
 
@@ -58,10 +59,27 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
       if (err) setError(err);
       else {
         trackEvent('signup_completed');
+        recordAffiliateSignup(email, fullName.trim());
         setSignupComplete(true);
       }
     }
     setLoading(false);
+  }
+
+  async function recordAffiliateSignup(signupEmail: string, signupFullName: string) {
+    const code = getStoredReferralCode();
+    if (!code) return;
+
+    try {
+      const { data } = await supabase.rpc('track_affiliate_signup', {
+        p_referral_code: code,
+        p_referred_email: signupEmail,
+        p_referred_full_name: signupFullName,
+      });
+      if (data) trackEvent('affiliate_referral_signup', { referral_code: code });
+    } catch (_) {
+      // Referral tracking should never block signup success.
+    }
   }
 
   async function handleForgotPassword(e: React.FormEvent) {

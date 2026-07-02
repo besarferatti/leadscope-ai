@@ -17,6 +17,7 @@ import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { createCheckoutSession } from './lib/stripe';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { supabase } from './lib/supabase';
+import { captureReferralFromUrl } from './lib/referrals';
 import { PlanId, BillingCycle } from './lib/plans';
 
 type AppPage =
@@ -131,6 +132,7 @@ function AppInner() {
 
   useEffect(() => {
     initAnalytics();
+    captureReferralFromUrl();
   }, []);
 
   useEffect(() => {
