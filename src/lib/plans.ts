@@ -67,8 +67,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   starter: {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 29,
-    yearlyPrice: 279,
+    monthlyPrice: 19,
+    yearlyPrice: 190,
     leadsLimit: 500,
     auditsLimit: 100,
     messagesLimit: 100,
@@ -86,8 +86,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 79,
-    yearlyPrice: 759,
+    monthlyPrice: 49,
+    yearlyPrice: 490,
     leadsLimit: 2500,
     auditsLimit: 500,
     messagesLimit: 500,
@@ -106,8 +106,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   agency: {
     id: 'agency',
     name: 'Agency',
-    monthlyPrice: 149,
-    yearlyPrice: 1429,
+    monthlyPrice: 99,
+    yearlyPrice: 990,
     leadsLimit: 10000,
     auditsLimit: 2000,
     messagesLimit: 2000,
