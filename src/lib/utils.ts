@@ -86,6 +86,7 @@ export const INDUSTRIES = [
 export const LANGUAGES = [
   'English', 'Spanish', 'French', 'German', 'Portuguese',
   'Italian', 'Dutch', 'Polish', 'Turkish', 'Arabic',
+  'Albanian', 'Macedonian',
 ];
 
 export const TONES = ['Professional', 'Friendly', 'Casual', 'Direct', 'Empathetic'];
