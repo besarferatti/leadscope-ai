@@ -13,7 +13,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { LEAD_STATUSES, LANGUAGES, TONES, formatDate, getScoreColor, getScoreBg } from '../lib/utils';
-import { canRunAudit, canGenerateMessage, isAdmin, incrementUsage } from '../lib/plans';
+import { canRunAudit, canGenerateMessage, isAdmin } from '../lib/plans';
 
 interface Props {
   leadId: string;
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
-  const { user, profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
   const [audit, setAudit] = useState<LeadAudit | null>(null);
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
@@ -57,14 +57,6 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     setLoading(false);
   }
 
-  async function getOpenAIKey(): Promise<string | null> {
-    const { data } = await supabase
-      .from('user_settings')
-      .select('openai_api_key')
-      .maybeSingle();
-    return (data as { openai_api_key?: string } | null)?.openai_api_key ?? null;
-  }
-
   async function handleAnalyze() {
     if (!lead) return;
 
@@ -80,103 +72,15 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     setAuditLoading(true);
     setError('');
 
-    const apiKey = await getOpenAIKey();
-    if (!apiKey) {
-      setError('OpenAI API key not configured. Go to Settings to add it.');
-      setAuditLoading(false);
-      return;
-    }
-
-    const prompt = `You are a digital marketing expert auditing a local business website. Analyze this business and generate a realistic website audit.
-
-Business: ${lead.business_name}
-Industry: ${lead.industry}
-Location: ${lead.location}
-Website: ${lead.website || 'no website'}
-Google Rating: ${lead.google_rating ?? 'unknown'} (${lead.reviews_count} reviews)
-
-Return a JSON object (no markdown, just raw JSON) with this exact structure:
-{
-  "website_score": <0-100 integer>,
-  "seo_score": <0-100 integer>,
-  "conversion_score": <0-100 integer>,
-  "lead_score": <0-100 integer>,
-  "main_issues": ["issue 1", "issue 2", "issue 3", "issue 4"],
-  "recommended_offer": "<specific service you should pitch to this business>",
-  "personalization_angle": "<unique angle to use when reaching out>",
-  "summary": "<2-3 sentence summary of why this is a good or bad lead>"
-}`;
-
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 700,
-        }),
+      const { data, error: functionError } = await supabase.functions.invoke('analyze-lead', {
+        body: { lead_id: leadId },
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${res.status})`);
-      }
+      if (functionError) throw new Error(functionError.message);
+      if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
-      const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-      const content = data.choices[0]?.message?.content ?? '';
-      const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      const parsed = JSON.parse(cleaned) as {
-        website_score: number;
-        seo_score: number;
-        conversion_score: number;
-        lead_score: number;
-        main_issues: string[];
-        recommended_offer: string;
-        personalization_angle: string;
-        summary: string;
-      };
-
-      // Upsert audit
-      if (audit) {
-        await supabase.from('lead_audits').update({
-          website_score: parsed.website_score,
-          seo_score: parsed.seo_score,
-          conversion_score: parsed.conversion_score,
-          main_issues: parsed.main_issues,
-          recommended_offer: parsed.recommended_offer,
-          personalization_angle: parsed.personalization_angle,
-          summary: parsed.summary,
-        }).eq('id', audit.id);
-      } else {
-        await supabase.from('lead_audits').insert({
-          lead_id: leadId,
-          website_score: parsed.website_score,
-          seo_score: parsed.seo_score,
-          conversion_score: parsed.conversion_score,
-          main_issues: parsed.main_issues,
-          recommended_offer: parsed.recommended_offer,
-          personalization_angle: parsed.personalization_angle,
-          summary: parsed.summary,
-        });
-      }
-
-      // Update lead score and status
-      await supabase.from('leads').update({
-        lead_score: parsed.lead_score,
-        status: 'Audited',
-      }).eq('id', leadId);
-
-      // Increment audit usage
-      if (user && !isAdmin(profile)) {
-        await incrementUsage(user.id, 'audits', 1);
-        await refreshProfile();
-      }
-
+      await refreshProfile();
       await loadAll();
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to analyze website.');
@@ -199,76 +103,20 @@ Return a JSON object (no markdown, just raw JSON) with this exact structure:
     setMsgLoading(true);
     setError('');
 
-    const apiKey = await getOpenAIKey();
-    if (!apiKey) {
-      setError('OpenAI API key not configured. Go to Settings to add it.');
-      setMsgLoading(false);
-      return;
-    }
-
-    const auditContext = audit
-      ? `Website audit: website score ${audit.website_score}/100, SEO score ${audit.seo_score}/100, conversion score ${audit.conversion_score}/100. Main issues: ${audit.main_issues.join(', ')}. Recommended offer: ${audit.recommended_offer}. Personalization angle: ${audit.personalization_angle}.`
-      : '';
-
-    const prompt = `You are a ${msgTone.toLowerCase()} outreach specialist for a digital marketing agency. Write a highly personalized cold ${msgChannel} in ${msgLanguage} for this prospect.
-
-Business: ${lead.business_name}
-Industry: ${lead.industry}
-Location: ${lead.location}
-Website: ${lead.website || 'no website'}
-Google Rating: ${lead.google_rating ?? 'unknown'} (${lead.reviews_count} reviews)
-${auditContext}
-
-${msgChannel === 'email' ? 'Write a cold email with a compelling subject line.' : 'Write a short DM (max 5 sentences).'}
-
-Return raw JSON only (no markdown):
-{
-  "subject": "<subject line${msgChannel === 'dm' ? ' (use empty string for DM)' : ''}>",
-  "body": "<${msgChannel === 'email' ? 'full email body with greeting, value proposition, soft CTA, and sign-off' : 'short DM message'}>"
-}`;
-
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+      const { data, error: functionError } = await supabase.functions.invoke('generate-outreach', {
+        body: {
+          lead_id: leadId,
+          channel: msgChannel,
+          language: msgLanguage,
+          tone: msgTone,
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.8,
-          max_tokens: 800,
-        }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${res.status})`);
-      }
+      if (functionError) throw new Error(functionError.message);
+      if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
-      const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-      const content = data.choices[0]?.message?.content ?? '';
-      const cleaned2 = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      const parsed = JSON.parse(cleaned2) as { subject: string; body: string };
-
-      await supabase.from('outreach_messages').insert({
-        lead_id: leadId,
-        channel: msgChannel,
-        language: msgLanguage,
-        tone: msgTone,
-        subject: parsed.subject,
-        body: parsed.body,
-      });
-
-      await supabase.from('leads').update({ status: 'Message Generated' }).eq('id', leadId);
-
-      // Increment message usage
-      if (user && !isAdmin(profile)) {
-        await incrementUsage(user.id, 'messages', 1);
-        await refreshProfile();
-      }
-
+      await refreshProfile();
       await loadAll();
       setMsgExpanded('new');
     } catch (e: unknown) {

@@ -50,21 +50,10 @@ Deno.serve(async (req: Request) => {
       return errorResponse("search_id, niche, and location are required");
     }
 
-    // Fetch the user's Google Places API key from their settings
-    const { data: settings, error: settingsError } = await supabase
-      .from("user_settings")
-      .select("google_places_api_key")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (settingsError) {
-      return errorResponse("Failed to load user settings", 500);
-    }
-
-    const apiKey = (settings as { google_places_api_key?: string } | null)?.google_places_api_key?.trim();
+    const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
 
     if (!apiKey) {
-      return errorResponse("Google Places API key is missing. Add it in Settings.", 422);
+      return errorResponse("Google Places API key is not configured on the server.", 500);
     }
 
     // Call Google Places Text Search API
