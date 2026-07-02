@@ -14,6 +14,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { LEAD_STATUSES, LANGUAGES, TONES, formatDate, getScoreColor, getScoreBg } from '../lib/utils';
 import { canRunAudit, canGenerateMessage, isAdmin } from '../lib/plans';
+import { trackEvent } from '../lib/analytics';
 
 interface Props {
   leadId: string;
@@ -80,6 +81,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       if (functionError) throw new Error(functionError.message);
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
+      trackEvent('website_audit_generated', { lead_id: leadId });
       await refreshProfile();
       await loadAll();
     } catch (e: unknown) {
@@ -116,6 +118,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       if (functionError) throw new Error(functionError.message);
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
+      trackEvent('outreach_message_generated', { lead_id: leadId, channel: msgChannel, language: msgLanguage, tone: msgTone });
       await refreshProfile();
       await loadAll();
       setMsgExpanded('new');

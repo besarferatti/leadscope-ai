@@ -14,6 +14,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { AdminPage } from './pages/admin/AdminPage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { createCheckoutSession } from './lib/stripe';
+import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { supabase } from './lib/supabase';
 import { PlanId, BillingCycle } from './lib/plans';
 
@@ -44,6 +45,7 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
       window.location.href = 'mailto:sales@leadscope.pro';
       return;
     }
+    trackEvent('checkout_started', { plan_id: planId, billing_cycle: billingCycle });
     setCheckoutLoading(planId);
     setCheckoutError('');
     const { url, error } = await createCheckoutSession(planId, billingCycle);
@@ -114,11 +116,24 @@ function AppInner() {
   );
   const [activatingPlan, setActivatingPlan] = useState(false);
 
+  function getPagePath(p: AppPage, params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    return `/${p}${query ? `?${query}` : ''}`;
+  }
+
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
     window.scrollTo(0, 0);
   }
+
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    trackPageView(getPagePath(page, pageParams));
+  }, [page, pageParams]);
 
   function dismissPlanPicker() {
     sessionStorage.setItem('plan_picker_dismissed', '1');
@@ -138,6 +153,7 @@ function AppInner() {
       sessionStorage.setItem('plan_picker_dismissed', '1');
       setPlanPickerDismissed(true);
       if (checkout === 'success') {
+        trackEvent('checkout_success');
         setActivatingPlan(true);
       } else if (checkout === 'cancel') {
         setCheckoutBanner('cancel');

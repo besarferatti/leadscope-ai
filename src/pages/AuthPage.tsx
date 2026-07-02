@@ -5,6 +5,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
+import { trackEvent } from '../lib/analytics';
 
 type Mode = 'login' | 'register' | 'forgot-password';
 
@@ -42,16 +43,23 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
     if (mode === 'login') {
       const { error: err } = await signIn(email, password);
       if (err) setError(err);
-      else onSuccess();
+      else {
+        trackEvent('login_completed');
+        onSuccess();
+      }
     } else {
       if (!fullName.trim()) {
         setError('Full name is required.');
         setLoading(false);
         return;
       }
+      trackEvent('signup_started');
       const { error: err } = await signUp(email, password, fullName.trim());
       if (err) setError(err);
-      else setSignupComplete(true);
+      else {
+        trackEvent('signup_completed');
+        setSignupComplete(true);
+      }
     }
     setLoading(false);
   }
