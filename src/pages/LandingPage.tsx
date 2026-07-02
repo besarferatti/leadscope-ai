@@ -7,6 +7,7 @@ interface Props {
   onGetStarted: () => void;
   onLogin: () => void;
   onPricing?: () => void;
+  onAffiliate?: () => void;
 }
 
 const features = [
@@ -48,7 +49,7 @@ const stats = [
   { value: '3 min', label: 'From search to pitch' },
 ];
 
-export function LandingPage({ onGetStarted, onLogin, onPricing }: Props) {
+export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* Nav */}
@@ -64,6 +65,11 @@ export function LandingPage({ onGetStarted, onLogin, onPricing }: Props) {
             {onPricing && (
               <button onClick={onPricing} className="text-slate-400 hover:text-slate-200 text-sm transition-colors">
                 Pricing
+              </button>
+            )}
+            {onAffiliate && (
+              <button onClick={onAffiliate} className="text-slate-400 hover:text-slate-200 text-sm transition-colors hidden sm:inline">
+                Affiliates
               </button>
             )}
             <button
@@ -202,7 +208,12 @@ export function LandingPage({ onGetStarted, onLogin, onPricing }: Props) {
             </div>
             <span className="text-slate-400 text-sm font-medium">LeadScope AI</span>
           </div>
-          <p className="text-slate-600 text-sm">© {new Date().getFullYear()} LeadScope AI. All rights reserved.</p>
+          <div className="flex items-center gap-4">
+            {onAffiliate && (
+              <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400 text-sm transition-colors">Affiliate Program</button>
+            )}
+            <p className="text-slate-600 text-sm">© {new Date().getFullYear()} LeadScope AI. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>
