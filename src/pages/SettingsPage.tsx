@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Key, Building2, Globe, Save, Eye, EyeOff, CheckCircle, AlertTriangle,
+  Key, Building2, Globe, Save, Eye, EyeOff, CheckCircle, ShieldCheck,
   User, CreditCard, Shield, BarChart3, MessageSquare, Users as UsersIcon,
   TrendingUp, Clock, Zap,
 } from 'lucide-react';
@@ -18,8 +18,6 @@ import { createCheckoutSession, createPortalSession } from '../lib/stripe';
 type Tab = 'profile' | 'api-keys' | 'billing' | 'security';
 
 interface ApiKeySettings {
-  openai_api_key: string;
-  google_places_api_key: string;
   agency_name: string;
   agency_website: string;
   default_language: string;
@@ -27,8 +25,6 @@ interface ApiKeySettings {
 }
 
 const defaults: ApiKeySettings = {
-  openai_api_key: '',
-  google_places_api_key: '',
   agency_name: '',
   agency_website: '',
   default_language: 'English',
@@ -72,8 +68,6 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
-  const [showOpenAI, setShowOpenAI] = useState(false);
-  const [showPlaces, setShowPlaces] = useState(false);
   const [upgradingTo, setUpgradingTo] = useState<PlanId | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
@@ -92,8 +86,6 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
       const { data } = await supabase.from('user_settings').select('*').maybeSingle();
       if (data) {
         setApiSettings({
-          openai_api_key: data.openai_api_key ?? '',
-          google_places_api_key: data.google_places_api_key ?? '',
           agency_name: data.agency_name ?? '',
           agency_website: data.agency_website ?? '',
           default_language: data.default_language ?? 'English',
@@ -260,36 +252,10 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
               </div>
               <h2 className="text-white font-semibold">API Keys</h2>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                  OpenAI API Key
-                  <span className="ml-2 text-xs text-amber-400 font-normal">Required for audits & messages</span>
-                </label>
-                <div className="relative">
-                  <input type={showOpenAI ? 'text' : 'password'} className="input pr-10" placeholder="sk-..." value={apiSettings.openai_api_key} onChange={e => setApiSettings(p => ({ ...p, openai_api_key: e.target.value }))} />
-                  <button type="button" onClick={() => setShowOpenAI(!showOpenAI)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                    {showOpenAI ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-slate-300 text-sm font-medium mb-1.5">
-                  Google Places API Key
-                  <span className="ml-2 text-xs text-slate-500 font-normal">For lead searches</span>
-                </label>
-                <div className="relative">
-                  <input type={showPlaces ? 'text' : 'password'} className="input pr-10" placeholder="AIza..." value={apiSettings.google_places_api_key} onChange={e => setApiSettings(p => ({ ...p, google_places_api_key: e.target.value }))} />
-                  <button type="button" onClick={() => setShowPlaces(!showPlaces)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
-                    {showPlaces ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-amber-200/70 text-xs leading-relaxed">
-                API keys are stored securely in your private account and never shared.
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <ShieldCheck className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <p className="text-blue-100/80 text-sm leading-relaxed">
+                API access is managed securely by LeadScope AI. You do not need to add your own OpenAI or Google Places API keys.
               </p>
             </div>
           </div>
