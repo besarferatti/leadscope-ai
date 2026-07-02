@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
 import { PricingPage } from './pages/PricingPage';
+import { AffiliatePage } from './pages/AffiliatePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
@@ -23,6 +24,7 @@ type AppPage =
   | 'login'
   | 'register'
   | 'pricing'
+  | 'affiliate'
   | 'change-password'
   | 'dashboard'
   | 'searches'
@@ -31,7 +33,7 @@ type AppPage =
   | 'settings'
   | 'admin';
 
-const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing'];
+const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'affiliate'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'settings', 'change-password'];
 
@@ -236,6 +238,16 @@ function AppInner() {
     );
   }
 
+  // Public affiliate page — accessible without auth
+  if (page === 'affiliate') {
+    return (
+      <AffiliatePage
+        onBack={() => navigate('landing')}
+        onLogin={() => { setAuthMode('login'); navigate('login'); }}
+      />
+    );
+  }
+
   // Public pricing page — accessible without auth
   if (page === 'pricing') {
     return (
@@ -264,6 +276,7 @@ function AppInner() {
         onGetStarted={() => { setAuthMode('register'); navigate('register'); }}
         onLogin={() => { setAuthMode('login'); navigate('login'); }}
         onPricing={() => navigate('pricing')}
+        onAffiliate={() => navigate('affiliate')}
       />
     );
   }

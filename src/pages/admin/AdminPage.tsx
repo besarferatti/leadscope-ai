@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, Database, Search, FileText,
-  MessageSquare, Settings, LogOut, ChevronRight, Crosshair, Shield, X, Menu,
+  MessageSquare, Settings, LogOut, ChevronRight, Crosshair, Shield, X, Menu, Handshake,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AdminOverview } from './AdminOverview';
@@ -12,6 +12,7 @@ import { AdminSearches } from './AdminSearches';
 import { AdminAudits } from './AdminAudits';
 import { AdminMessages } from './AdminMessages';
 import { AdminSystem } from './AdminSystem';
+import { AdminAffiliates } from './AdminAffiliates';
 
 type AdminSection =
   | 'overview'
@@ -21,6 +22,7 @@ type AdminSection =
   | 'searches'
   | 'audits'
   | 'messages'
+  | 'affiliates'
   | 'system';
 
 interface Props {
@@ -36,6 +38,7 @@ const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] =
   { id: 'searches', label: 'Lead Searches', icon: Search },
   { id: 'audits', label: 'Audits', icon: FileText },
   { id: 'messages', label: 'Outreach Messages', icon: MessageSquare },
+  { id: 'affiliates', label: 'Affiliates', icon: Handshake },
   { id: 'system', label: 'System Settings', icon: Settings },
 ];
 
@@ -53,6 +56,7 @@ export function AdminPage({ onNavigate, adminPage }: Props) {
       case 'searches': return <AdminSearches />;
       case 'audits': return <AdminAudits />;
       case 'messages': return <AdminMessages />;
+      case 'affiliates': return <AdminAffiliates />;
       case 'system': return <AdminSystem />;
       default: return <AdminOverview />;
     }
