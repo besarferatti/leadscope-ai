@@ -1,19 +1,36 @@
 import { useEffect, useState } from 'react';
-import { Users, Search, FileText, MessageSquare, TrendingUp, UserCheck, Zap } from 'lucide-react';
+import { Users, Search, FileText, MessageSquare, TrendingUp, UserCheck, Zap, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { PLANS, type PlanId } from '../../lib/plans';
 
 interface AdminStats {
   totalUsers: number;
   activeUsers: number;
   trialUsers: number;
   paidUsers: number;
+  estimatedMRR: number;
+  estimatedARR: number;
+  averageRevenuePerPaidUser: number;
   totalLeads: number;
   totalAudits: number;
   totalMessages: number;
   leadsThisMonth: number;
   auditsThisMonth: number;
   messagesThisMonth: number;
+}
+
+const PAID_PLAN_IDS: PlanId[] = ['starter', 'pro', 'agency'];
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatCurrency(value: number) {
+  return currencyFormatter.format(value);
 }
 
 export function AdminOverview() {
@@ -26,7 +43,7 @@ export function AdminOverview() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
       const [usersRes, leadsRes, auditsRes, messagesRes] = await Promise.all([
-        supabase.from('user_profiles').select('subscription_status, is_active'),
+        supabase.from('user_profiles').select('current_plan, billing_cycle, subscription_status, is_active, role'),
         supabase.from('leads').select('created_at'),
         supabase.from('lead_audits').select('created_at'),
         supabase.from('outreach_messages').select('created_at'),
@@ -37,11 +54,31 @@ export function AdminOverview() {
       const audits = auditsRes.data ?? [];
       const messages = messagesRes.data ?? [];
 
+      const activePaidUsers = users.filter(user => (
+        user.subscription_status === 'active' &&
+        user.is_active === true &&
+        user.role !== 'admin' &&
+        PAID_PLAN_IDS.includes(user.current_plan as PlanId)
+      ));
+
+      const estimatedMRR = activePaidUsers.reduce((total, user) => {
+        const plan = PLANS[user.current_plan as PlanId];
+
+        if (user.billing_cycle === 'yearly') {
+          return total + ((plan.yearlyPrice ?? 0) / 12);
+        }
+
+        return total + (plan.monthlyPrice ?? 0);
+      }, 0);
+
       setStats({
         totalUsers: users.length,
         activeUsers: users.filter(u => u.is_active).length,
         trialUsers: users.filter(u => u.subscription_status === 'trialing').length,
-        paidUsers: users.filter(u => u.subscription_status === 'active').length,
+        paidUsers: activePaidUsers.length,
+        estimatedMRR,
+        estimatedARR: estimatedMRR * 12,
+        averageRevenuePerPaidUser: activePaidUsers.length > 0 ? estimatedMRR / activePaidUsers.length : 0,
         totalLeads: leads.length,
         totalAudits: audits.length,
         totalMessages: messages.length,
@@ -62,6 +99,9 @@ export function AdminOverview() {
     { label: 'Active Users', value: stats.activeUsers, icon: UserCheck, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { label: 'Trial Users', value: stats.trialUsers, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-500/10' },
     { label: 'Paid Users', value: stats.paidUsers, icon: TrendingUp, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+    { label: 'Estimated MRR', value: formatCurrency(stats.estimatedMRR), icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'Estimated ARR', value: formatCurrency(stats.estimatedARR), icon: DollarSign, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: 'Average Revenue Per Paid User', value: formatCurrency(stats.averageRevenuePerPaidUser), icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
     { label: 'Total Leads', value: stats.totalLeads, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
     { label: 'Total Audits', value: stats.totalAudits, icon: FileText, color: 'text-slate-400', bg: 'bg-slate-700' },
     { label: 'Total Messages', value: stats.totalMessages, icon: MessageSquare, color: 'text-violet-400', bg: 'bg-violet-500/10' },
@@ -85,7 +125,7 @@ export function AdminOverview() {
                 <card.icon className={`w-4 h-4 ${card.color}`} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white">{card.value.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-white">{typeof card.value === 'number' ? card.value.toLocaleString() : card.value}</p>
           </div>
         ))}
       </div>
