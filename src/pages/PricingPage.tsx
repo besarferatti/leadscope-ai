@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Check, X, Zap, Crosshair, ChevronLeft, Star,
 } from 'lucide-react';
 import { PLANS, PLAN_DISPLAY_ORDER, PlanId, BillingCycle } from '../lib/plans';
+import { trackEvent } from '../lib/analytics';
 
 interface Props {
   onGetStarted?: () => void;
@@ -89,6 +90,10 @@ const PLAN_BUTTON_TEXT: Record<PlanId, string> = {
 
 export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSelectPlan, embedded }: Props) {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
+
+  useEffect(() => {
+    trackEvent('pricing_viewed', { embedded: Boolean(embedded) });
+  }, [embedded]);
 
   function handleSelect(planId: PlanId) {
     if (onSelectPlan) {

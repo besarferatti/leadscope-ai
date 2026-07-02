@@ -12,6 +12,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { formatDate, getSearchStatusColor, LANGUAGES } from '../lib/utils';
 import { canGenerateLead, isAdmin, incrementUsage } from '../lib/plans';
+import { trackEvent } from '../lib/analytics';
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
@@ -117,6 +118,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       }
     }
 
+    trackEvent('lead_search_started', { search_id: search.id });
     setFindState(prev => ({ ...prev, [search.id]: { loading: true, error: '', result: null } }));
 
     await supabase.from('lead_searches').update({ status: 'running' }).eq('id', search.id);
@@ -155,6 +157,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
         await refreshProfile();
       }
 
+      trackEvent('lead_search_completed', { search_id: search.id, inserted, skipped });
       setFindState(prev => ({ ...prev, [search.id]: { loading: false, error: '', result: { inserted, skipped } } }));
       setSearches(prev => prev.map(s => s.id === search.id ? { ...s, status: 'completed' } : s));
 
