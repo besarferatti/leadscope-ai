@@ -83,6 +83,8 @@ export interface LeadAudit {
   personalization_angle: string;
   summary: string;
   seo_content_pack?: SeoContentPack;
+  share_token?: string | null;
+  shared_at?: string | null;
   created_at: string;
 }
 
@@ -108,3 +110,22 @@ export interface UserSettings {
 
 // Re-export UserProfile from plans so it's accessible from types
 export type { UserProfile } from '../lib/plans';
+
+
+export type PublicSeoContentPack = Omit<SeoContentPack, 'suggested_pricing'>;
+
+export interface SharedAuditReport {
+  business_name: string;
+  website: string;
+  location: string;
+  lead_score: number | null;
+  website_score: number;
+  seo_score: number;
+  conversion_score: number;
+  main_issues: string[];
+  recommended_offer: string;
+  personalization_angle: string;
+  summary: string;
+  seo_content_pack?: PublicSeoContentPack | null;
+  shared_at: string | null;
+}

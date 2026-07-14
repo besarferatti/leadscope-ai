@@ -23,19 +23,6 @@ interface Props {
 }
 
 
-async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), ms);
-  });
-
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timeoutId!);
-  }
-}
-
 const defaultForm = {
   business_name: '',
   industry: '',

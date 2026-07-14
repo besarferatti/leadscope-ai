@@ -10,6 +10,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
 import { LeadsPage } from './pages/LeadsPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
+import { SharedAuditReportPage } from './pages/SharedAuditReportPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { AdminPage } from './pages/admin/AdminPage';
@@ -118,6 +119,7 @@ function AppInner() {
     () => sessionStorage.getItem('plan_picker_dismissed') === '1'
   );
   const [activatingPlan, setActivatingPlan] = useState(false);
+  const shareMatch = window.location.pathname.match(/^\/audit\/share\/([^/]+)$/);
 
   function getPagePath(p: AppPage, params: Record<string, string> = {}) {
     const query = new URLSearchParams(params).toString();
@@ -203,14 +205,14 @@ function AppInner() {
           }),
           new Promise(r => setTimeout(r, 6000)),
         ]);
-      } catch (_) {
+      } catch {
         // proceed to dashboard regardless
       }
       if (cancelled) return;
       // Refresh profile but don't let it block forever
       try {
         await Promise.race([refreshProfile(), new Promise(r => setTimeout(r, 5000))]);
-      } catch (_) { /* ignore */ }
+      } catch { /* ignore */ }
       if (cancelled) return;
       clearTimeout(hardCap);
       cancelled = true;
@@ -221,6 +223,10 @@ function AppInner() {
     syncAndActivate();
     return () => { cancelled = true; clearTimeout(hardCap); };
   }, [activatingPlan, session?.user?.id]);
+
+  if (shareMatch) {
+    return <SharedAuditReportPage token={decodeURIComponent(shareMatch[1])} />;
+  }
 
   if (loading) {
     return (

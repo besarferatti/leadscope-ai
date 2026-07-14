@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink,
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
-  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign,
+  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [auditLoading, setAuditLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [msgLoading, setMsgLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
@@ -127,6 +128,43 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       setError((e as Error).message ?? 'Failed to generate message.');
     }
     setMsgLoading(false);
+  }
+
+
+  function createShareToken() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function handleShareAudit() {
+    if (!audit) return;
+    setShareLoading(true);
+    setError('');
+
+    try {
+      let token = audit.share_token;
+
+      if (!token) {
+        token = createShareToken();
+        const sharedAt = new Date().toISOString();
+        const { data, error: updateError } = await supabase
+          .from('lead_audits')
+          .update({ share_token: token, shared_at: sharedAt })
+          .eq('id', audit.id)
+          .select('*')
+          .single();
+
+        if (updateError) throw new Error(updateError.message);
+        setAudit(data as LeadAudit);
+      }
+
+      await copyText(`${window.location.origin}/audit/share/${token}`, 'audit-share-link');
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Failed to create share link.');
+    }
+
+    setShareLoading(false);
   }
 
   async function updateStatus(status: LeadStatus) {
@@ -281,17 +319,34 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                 <h2 className="text-white font-semibold">Website Audit</h2>
                 <p className="text-slate-500 text-xs mt-0.5">AI-generated analysis of this business's online presence</p>
               </div>
-              <button
-                onClick={handleAnalyze}
-                disabled={auditLoading}
-                className="btn-primary text-xs py-2"
-              >
-                {auditLoading ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</>
-                ) : (
-                  <><Zap className="w-3.5 h-3.5" /> {audit ? 'Re-analyze' : 'Analyze Website'}</>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {audit && (
+                  <button
+                    onClick={handleShareAudit}
+                    disabled={shareLoading}
+                    className="btn-secondary text-xs py-2"
+                  >
+                    {shareLoading ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
+                    ) : copied === 'audit-share-link' ? (
+                      <><Check className="w-3.5 h-3.5 text-emerald-400" /> Link copied</>
+                    ) : (
+                      <><Link2 className="w-3.5 h-3.5" /> {audit.share_token ? 'Copy Share Link' : 'Create Share Link'}</>
+                    )}
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleAnalyze}
+                  disabled={auditLoading}
+                  className="btn-primary text-xs py-2"
+                >
+                  {auditLoading ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</>
+                  ) : (
+                    <><Zap className="w-3.5 h-3.5" /> {audit ? 'Re-analyze' : 'Analyze Website'}</>
+                  )}
+                </button>
+              </div>
             </div>
 
             {audit ? (
