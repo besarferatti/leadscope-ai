@@ -10,7 +10,19 @@ const corsHeaders = {
 type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
 type UserProfile = { id: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; audits_used_this_month: number; is_active: boolean };
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
-type AuditPayload = { website_score: number; seo_score: number; conversion_score: number; lead_score: number; main_issues: string[]; recommended_offer: string; personalization_angle: string; summary: string };
+type SeoContentPack = {
+  suggested_keywords: { primary: string[]; local: string[]; service: string[]; long_tail: string[] };
+  meta_title: string;
+  meta_description: string;
+  h1_suggestion: string;
+  service_page_ideas: string[];
+  blog_post_ideas: string[];
+  google_business_posts: string[];
+  homepage_copy: { headline: string; subheadline: string; cta: string };
+  recommended_service: { service_name: string; why_sell_this: string; deliverables: string[] };
+  suggested_pricing: { market_detected: string; one_time_setup: string; monthly_retainer: string; currency: string; pricing_reason: string };
+};
+type AuditPayload = { website_score: number; seo_score: number; conversion_score: number; lead_score: number; main_issues: string[]; recommended_offer: string; personalization_angle: string; summary: string; seo_content_pack?: SeoContentPack };
 type WebsiteSignals = {
   fetchStatus: "not_provided" | "success" | "failed";
   url: string;
@@ -183,8 +195,72 @@ Deno.serve(async (req: Request) => {
       ? "Real website HTML was fetched successfully. Use these extracted signals as evidence for technical SEO and conversion observations."
       : `Website HTML could not be fetched (${websiteSignals.failureReason ?? "unknown reason"}). Generate the audit using the business info and do not invent technical website issues.`;
 
-    const prompt = `You are a digital marketing expert auditing a local business website for an agency doing outreach to local businesses. Analyze this business and generate a realistic website audit.\n\nBusiness: ${typedLead.business_name}\nIndustry: ${typedLead.industry}\nLocation: ${typedLead.location}\nWebsite: ${typedLead.website || "no website"}\nGoogle Rating: ${typedLead.google_rating ?? "unknown"} (${typedLead.reviews_count} reviews)\n\nWebsite HTML signal note: ${websiteSignalNote}\nExtracted website signals:\n${JSON.stringify(websiteSignals, null, 2)}\n\nInstructions:\n- Use the real extracted website signals when available.\n- Make main_issues specific, practical, and useful for agency outreach.\n- Mention issues like missing H1, weak/missing meta description, no clear CTA, missing mobile viewport, weak title, or outdated structure only when supported by the extracted signals.\n- Do not invent technical issues if website signals are unavailable.\n- Keep the JSON keys and value types exactly as requested.\n\nReturn a JSON object (no markdown, just raw JSON) with this exact structure:\n{\n  "website_score": <0-100 integer>,\n  "seo_score": <0-100 integer>,\n  "conversion_score": <0-100 integer>,\n  "lead_score": <0-100 integer>,\n  "main_issues": ["issue 1", "issue 2", "issue 3", "issue 4"],\n  "recommended_offer": "<specific service you should pitch to this business>",\n  "personalization_angle": "<unique angle to use when reaching out>",\n  "summary": "<2-3 sentence summary of why this is a good or bad lead>"\n}`;
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.7, max_tokens: 700 }) });
+    const prompt = `You are a digital marketing expert auditing a local business website for an agency doing outreach to local businesses. Analyze this business and generate a realistic website audit.
+
+Business: ${typedLead.business_name}
+Industry: ${typedLead.industry}
+Location: ${typedLead.location}
+Website: ${typedLead.website || "no website"}
+Google Rating: ${typedLead.google_rating ?? "unknown"} (${typedLead.reviews_count} reviews)
+
+Website HTML signal note: ${websiteSignalNote}
+Extracted website signals:
+${JSON.stringify(websiteSignals, null, 2)}
+
+Instructions:
+- Use the real extracted website signals when available.
+- Make main_issues specific, practical, and useful for agency outreach.
+- Mention issues like missing H1, weak/missing meta description, no clear CTA, missing mobile viewport, weak title, or outdated structure only when supported by the extracted signals.
+- Do not invent technical issues if website signals are unavailable.
+- Keep the existing core JSON keys and value types exactly as requested.
+- Add seo_content_pack as an optional object with practical SEO and content ideas for agency fulfillment.
+- Do not claim search volume, keyword difficulty, ranking guarantees, or guaranteed results.
+- Pricing must be clearly framed as estimated service price ranges, not guaranteed pricing.
+- Pricing logic: Balkan markets should suggest lower pricing, Europe should suggest mid/high pricing, and USA should suggest higher pricing.
+
+Return a JSON object (no markdown, just raw JSON) with this exact structure:
+{
+  "website_score": <0-100 integer>,
+  "seo_score": <0-100 integer>,
+  "conversion_score": <0-100 integer>,
+  "lead_score": <0-100 integer>,
+  "main_issues": ["issue 1", "issue 2", "issue 3", "issue 4"],
+  "recommended_offer": "<specific service you should pitch to this business>",
+  "personalization_angle": "<unique angle to use when reaching out>",
+  "summary": "<2-3 sentence summary of why this is a good or bad lead>",
+  "seo_content_pack": {
+    "suggested_keywords": {
+      "primary": ["keyword 1", "keyword 2"],
+      "local": ["location keyword 1", "location keyword 2"],
+      "service": ["service keyword 1", "service keyword 2"],
+      "long_tail": ["long-tail keyword 1", "long-tail keyword 2"]
+    },
+    "meta_title": "<SEO-friendly meta title suggestion>",
+    "meta_description": "<SEO-friendly meta description suggestion>",
+    "h1_suggestion": "<homepage H1 suggestion>",
+    "service_page_ideas": ["service page idea 1", "service page idea 2", "service page idea 3"],
+    "blog_post_ideas": ["blog post idea 1", "blog post idea 2", "blog post idea 3"],
+    "google_business_posts": ["post idea 1", "post idea 2", "post idea 3"],
+    "homepage_copy": {
+      "headline": "<homepage headline>",
+      "subheadline": "<homepage subheadline>",
+      "cta": "<call-to-action>"
+    },
+    "recommended_service": {
+      "service_name": "<agency service to sell>",
+      "why_sell_this": "<why this service fits this business>",
+      "deliverables": ["deliverable 1", "deliverable 2", "deliverable 3"]
+    },
+    "suggested_pricing": {
+      "market_detected": "<Balkan | Europe | USA | Other>",
+      "one_time_setup": "<estimated setup price range>",
+      "monthly_retainer": "<estimated monthly retainer range>",
+      "currency": "<currency code>",
+      "pricing_reason": "<short note that these are estimated service price ranges, not guaranteed pricing>"
+    }
+  }
+}`;
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.7, max_tokens: 1600 }) });
     if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); return errorResponse((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`, 502); }
     const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
     const parsed = JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as AuditPayload;
@@ -198,7 +274,7 @@ Deno.serve(async (req: Request) => {
       const { error: usageError } = await serviceClient.from("user_profiles").update({ audits_used_this_month: typedProfile.audits_used_this_month + 1, updated_at: new Date().toISOString() }).eq("id", user.id);
       if (usageError) return errorResponse(`Failed to update usage: ${usageError.message}`, 500);
     }
-    return jsonResponse({ audit: auditWrite.data });
+    return jsonResponse({ audit: { ...auditWrite.data, seo_content_pack: parsed.seo_content_pack } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to analyze lead.";
     return errorResponse(message, 500);
