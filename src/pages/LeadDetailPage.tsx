@@ -137,7 +137,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
-  async function handleShareAudit() {
+  async function handleShareAudit(language: 'en' | 'sq' | 'mk') {
     if (!audit) return;
     setShareLoading(true);
     setError('');
@@ -159,7 +159,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         setAudit(data as LeadAudit);
       }
 
-      await copyText(`${window.location.origin}/audit/share/${token}`, 'audit-share-link');
+      await copyText(`${window.location.origin}/audit/share/${token}?lang=${language}`, `audit-share-link-${language}`);
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to create share link.');
     }
@@ -321,19 +321,47 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {audit && (
-                  <button
-                    onClick={handleShareAudit}
-                    disabled={shareLoading}
-                    className="btn-secondary text-xs py-2"
-                  >
-                    {shareLoading ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
-                    ) : copied === 'audit-share-link' ? (
-                      <><Check className="w-3.5 h-3.5 text-emerald-400" /> Link copied</>
-                    ) : (
-                      <><Link2 className="w-3.5 h-3.5" /> {audit.share_token ? 'Copy Share Link' : 'Create Share Link'}</>
-                    )}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleShareAudit('en')}
+                      disabled={shareLoading}
+                      className="btn-secondary text-xs py-2"
+                    >
+                      {shareLoading ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
+                      ) : copied === 'audit-share-link-en' ? (
+                        <><Check className="w-3.5 h-3.5 text-emerald-400" /> English copied</>
+                      ) : (
+                        <><Link2 className="w-3.5 h-3.5" /> {audit.share_token ? 'Copy English Link' : 'Create English Link'}</>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleShareAudit('sq')}
+                      disabled={shareLoading}
+                      className="btn-secondary text-xs py-2"
+                    >
+                      {shareLoading ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
+                      ) : copied === 'audit-share-link-sq' ? (
+                        <><Check className="w-3.5 h-3.5 text-emerald-400" /> Albanian copied</>
+                      ) : (
+                        <><Link2 className="w-3.5 h-3.5" /> {audit.share_token ? 'Copy Albanian Link' : 'Create Albanian Link'}</>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleShareAudit('mk')}
+                      disabled={shareLoading}
+                      className="btn-secondary text-xs py-2"
+                    >
+                      {shareLoading ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
+                      ) : copied === 'audit-share-link-mk' ? (
+                        <><Check className="w-3.5 h-3.5 text-emerald-400" /> Macedonian copied</>
+                      ) : (
+                        <><Link2 className="w-3.5 h-3.5" /> {audit.share_token ? 'Copy Macedonian Link' : 'Create Macedonian Link'}</>
+                      )}
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={handleAnalyze}
