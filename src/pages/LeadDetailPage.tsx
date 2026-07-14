@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink,
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
-  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle,
+  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +34,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [copied, setCopied] = useState<string | null>(null);
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
+  const seoPack = audit?.seo_content_pack;
 
   // Outreach form
   const [msgChannel, setMsgChannel] = useState<'email' | 'dm'>('email');
@@ -360,6 +361,100 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                       <h3 className="text-emerald-300 font-medium text-sm">Personalization Angle</h3>
                     </div>
                     <p className="text-slate-300 text-sm">{audit.personalization_angle}</p>
+                  </div>
+                )}
+
+                {/* SEO & Content Opportunities */}
+                {seoPack && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4 text-purple-300" />
+                      <h3 className="text-purple-200 font-medium text-sm">SEO & Content Opportunities</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {([
+                        ['Primary', seoPack.suggested_keywords?.primary],
+                        ['Local', seoPack.suggested_keywords?.local],
+                        ['Service', seoPack.suggested_keywords?.service],
+                        ['Long-tail', seoPack.suggested_keywords?.long_tail],
+                      ] as const).map(([label, keywords]) => (
+                        <div key={label} className="bg-slate-900/40 rounded-lg p-3">
+                          <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">{label} keywords</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(keywords ?? []).map(keyword => (
+                              <span key={keyword} className="px-2 py-1 rounded-md bg-purple-500/10 text-purple-100 text-xs border border-purple-500/20">
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">Meta title</p>
+                        <p className="text-slate-200 text-sm">{seoPack.meta_title}</p>
+                      </div>
+                      <div className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">Meta description</p>
+                        <p className="text-slate-200 text-sm">{seoPack.meta_description}</p>
+                      </div>
+                      <div className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">H1 suggestion</p>
+                        <p className="text-slate-200 text-sm">{seoPack.h1_suggestion}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {([
+                        ['Service pages', seoPack.service_page_ideas],
+                        ['Blog posts', seoPack.blog_post_ideas],
+                        ['Google Business posts', seoPack.google_business_posts],
+                      ] as const).map(([label, ideas]) => (
+                        <div key={label} className="bg-slate-900/40 rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="w-3.5 h-3.5 text-purple-300" />
+                            <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">{label}</p>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {(ideas ?? []).map(idea => <li key={idea} className="text-slate-300 text-sm">• {idea}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Homepage copy</p>
+                        <p className="text-white text-sm font-semibold">{seoPack.homepage_copy?.headline}</p>
+                        <p className="text-slate-300 text-sm mt-1">{seoPack.homepage_copy?.subheadline}</p>
+                        <p className="text-purple-200 text-sm mt-2">CTA: {seoPack.homepage_copy?.cta}</p>
+                      </div>
+                      <div className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Recommended service</p>
+                        <p className="text-white text-sm font-semibold">{seoPack.recommended_service?.service_name}</p>
+                        <p className="text-slate-300 text-sm mt-1">{seoPack.recommended_service?.why_sell_this}</p>
+                        <ul className="mt-2 space-y-1">
+                          {(seoPack.recommended_service?.deliverables ?? []).map(item => <li key={item} className="text-slate-300 text-sm">• {item}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/40 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <DollarSign className="w-3.5 h-3.5 text-purple-300" />
+                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">Suggested pricing</p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+                        <p><span className="text-slate-500">Market:</span> <span className="text-slate-200">{seoPack.suggested_pricing?.market_detected}</span></p>
+                        <p><span className="text-slate-500">Setup:</span> <span className="text-slate-200">{seoPack.suggested_pricing?.one_time_setup}</span></p>
+                        <p><span className="text-slate-500">Retainer:</span> <span className="text-slate-200">{seoPack.suggested_pricing?.monthly_retainer}</span></p>
+                        <p><span className="text-slate-500">Currency:</span> <span className="text-slate-200">{seoPack.suggested_pricing?.currency}</span></p>
+                      </div>
+                      <p className="text-slate-400 text-xs mt-2">{seoPack.suggested_pricing?.pricing_reason}</p>
+                    </div>
                   </div>
                 )}
 

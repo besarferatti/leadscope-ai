@@ -40,6 +40,38 @@ export interface Lead {
   created_at: string;
 }
 
+export interface SeoContentPack {
+  suggested_keywords: {
+    primary: string[];
+    local: string[];
+    service: string[];
+    long_tail: string[];
+  };
+  meta_title: string;
+  meta_description: string;
+  h1_suggestion: string;
+  service_page_ideas: string[];
+  blog_post_ideas: string[];
+  google_business_posts: string[];
+  homepage_copy: {
+    headline: string;
+    subheadline: string;
+    cta: string;
+  };
+  recommended_service: {
+    service_name: string;
+    why_sell_this: string;
+    deliverables: string[];
+  };
+  suggested_pricing: {
+    market_detected: string;
+    one_time_setup: string;
+    monthly_retainer: string;
+    currency: string;
+    pricing_reason: string;
+  };
+}
+
 export interface LeadAudit {
   id: string;
   lead_id: string;
@@ -50,6 +82,7 @@ export interface LeadAudit {
   recommended_offer: string;
   personalization_angle: string;
   summary: string;
+  seo_content_pack?: SeoContentPack;
   created_at: string;
 }
 
