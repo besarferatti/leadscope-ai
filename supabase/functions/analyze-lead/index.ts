@@ -264,7 +264,7 @@ Return a JSON object (no markdown, just raw JSON) with this exact structure:
     if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); return errorResponse((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`, 502); }
     const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
     const parsed = JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as AuditPayload;
-    const auditValues = { lead_id, website_score: parsed.website_score, seo_score: parsed.seo_score, conversion_score: parsed.conversion_score, main_issues: parsed.main_issues, recommended_offer: parsed.recommended_offer, personalization_angle: parsed.personalization_angle, summary: parsed.summary };
+    const auditValues = { lead_id, website_score: parsed.website_score, seo_score: parsed.seo_score, conversion_score: parsed.conversion_score, main_issues: parsed.main_issues, recommended_offer: parsed.recommended_offer, personalization_angle: parsed.personalization_angle, summary: parsed.summary, seo_content_pack: parsed.seo_content_pack };
     const { data: existingAudit } = await serviceClient.from("lead_audits").select("id").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const auditWrite = existingAudit ? await serviceClient.from("lead_audits").update(auditValues).eq("id", existingAudit.id).select("*").single() : await serviceClient.from("lead_audits").insert(auditValues).select("*").single();
     if (auditWrite.error) return errorResponse(`Failed to save audit: ${auditWrite.error.message}`, 500);
