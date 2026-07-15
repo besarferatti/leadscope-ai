@@ -30,9 +30,11 @@ type CardStyle = "rounded" | "sharp" | "glass" | "editorial" | "bordered" | "sha
 type VisualDensity = "minimal" | "balanced" | "rich";
 type AccentStyle = "soft" | "bold" | "premium" | "warm" | "technical";
 type ImageStyle = "clean" | "cinematic" | "editorial" | "project" | "gallery" | "luxury";
+type StructureVariant = "classic" | "service_first" | "gallery_first" | "story_driven" | "trust_first" | "cta_focused" | "editorial" | "project_showcase";
 
 type VisualTheme = {
   design_variant_id: string;
+  structure_variant: StructureVariant;
   layout_variant: LayoutVariant;
   color_theme: string;
   hero_style: HeroStyle;
@@ -49,15 +51,21 @@ type VisualTheme = {
   image_sections: Array<{ title: string; description: string; image_alt: string; visual_type: "hero" | "gallery" | "service" | "trust" | "cta" }>;
 };
 
-type DesignVariant = Pick<VisualTheme, "design_variant_id" | "layout_variant" | "color_theme" | "hero_style" | "section_order" | "card_style" | "visual_density" | "accent_style" | "image_style">;
+type DesignVariant = Pick<VisualTheme, "design_variant_id" | "structure_variant" | "layout_variant" | "color_theme" | "hero_style" | "section_order" | "card_style" | "visual_density" | "accent_style" | "image_style">;
 type PreviousDesign = Partial<DesignVariant>;
 
-const sectionOrders = [
-  ["services", "experience", "trust", "cta"],
-  ["experience", "services", "trust", "cta"],
-  ["trust", "services", "experience", "cta"],
-  ["services", "trust", "experience", "cta"],
-];
+const allowedSections = ["trust", "services", "service_detail", "about", "story", "process", "projects", "gallery", "experience", "testimonial", "testimonials", "why_us", "cta", "contact", "quote_cta", "featured_service"] as const;
+const structureVariants: StructureVariant[] = ["classic", "service_first", "gallery_first", "story_driven", "trust_first", "cta_focused", "editorial", "project_showcase"];
+const structureSectionOrders: Record<StructureVariant, string[][]> = {
+  classic: [["trust", "services", "about", "gallery", "why_us", "contact"], ["services", "trust", "about", "testimonial", "gallery", "contact"]],
+  service_first: [["services", "service_detail", "why_us", "testimonial", "contact"], ["services", "featured_service", "process", "trust", "contact"]],
+  gallery_first: [["gallery", "services", "experience", "testimonial", "contact"], ["gallery", "featured_service", "story", "services", "contact"]],
+  story_driven: [["about", "story", "process", "services", "trust", "contact"], ["story", "about", "services", "gallery", "testimonial", "contact"]],
+  trust_first: [["trust", "testimonial", "services", "about", "contact"], ["trust", "why_us", "services", "testimonial", "contact"]],
+  cta_focused: [["cta", "services", "why_us", "gallery", "contact"], ["cta", "featured_service", "trust", "services", "quote_cta"]],
+  editorial: [["story", "featured_service", "gallery", "services", "contact"], ["about", "story", "gallery", "testimonial", "contact"]],
+  project_showcase: [["projects", "process", "services", "why_us", "quote_cta"], ["projects", "gallery", "process", "trust", "contact"]],
+};
 const heroStyles: HeroStyle[] = ["split", "bold", "gallery", "editorial", "minimal", "magazine", "service"];
 const cardStyles: CardStyle[] = ["rounded", "sharp", "glass", "editorial", "bordered", "shadow"];
 const densityStyles: VisualDensity[] = ["minimal", "balanced", "rich"];
@@ -67,63 +75,85 @@ function pickRandom<T>(items: T[]): T { return items[crypto.getRandomValues(new 
 function getDesignVariantPools(layout: LayoutVariant): DesignVariant[] {
   const pools: Record<LayoutVariant, DesignVariant[]> = {
     medical: [
-      { design_variant_id: "medical-clean", layout_variant: "medical", color_theme: "white-blue", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
-      { design_variant_id: "medical-premium", layout_variant: "medical", color_theme: "navy-white", hero_style: "editorial", section_order: ["services", "trust", "experience", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "premium", image_style: "editorial" },
-      { design_variant_id: "medical-soft", layout_variant: "medical", color_theme: "light-blue-cream", hero_style: "minimal", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
-      { design_variant_id: "medical-modern", layout_variant: "medical", color_theme: "bright-minimal", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "bold", image_style: "gallery" },
+      { design_variant_id: "medical-clean", structure_variant: "trust_first", layout_variant: "medical", color_theme: "white-blue", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "medical-premium", structure_variant: "classic", layout_variant: "medical", color_theme: "navy-white", hero_style: "editorial", section_order: ["services", "trust", "experience", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "premium", image_style: "editorial" },
+      { design_variant_id: "medical-soft", structure_variant: "cta_focused", layout_variant: "medical", color_theme: "light-blue-cream", hero_style: "minimal", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "medical-modern", structure_variant: "service_first", layout_variant: "medical", color_theme: "bright-minimal", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "bold", image_style: "gallery" },
     ],
     construction: [
-      { design_variant_id: "construction-bold", layout_variant: "construction", color_theme: "dark-amber", hero_style: "bold", section_order: ["experience", "services", "trust", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "project" },
-      { design_variant_id: "construction-projects", layout_variant: "construction", color_theme: "white-gray", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "gallery" },
-      { design_variant_id: "construction-industrial", layout_variant: "construction", color_theme: "black-orange", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "project" },
-      { design_variant_id: "construction-modern", layout_variant: "construction", color_theme: "architectural-clean", hero_style: "split", section_order: ["trust", "experience", "services", "cta"], card_style: "editorial", visual_density: "minimal", accent_style: "premium", image_style: "cinematic" },
+      { design_variant_id: "construction-bold", structure_variant: "project_showcase", layout_variant: "construction", color_theme: "dark-amber", hero_style: "bold", section_order: ["experience", "services", "trust", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "project" },
+      { design_variant_id: "construction-projects", structure_variant: "project_showcase", layout_variant: "construction", color_theme: "white-gray", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "gallery" },
+      { design_variant_id: "construction-industrial", structure_variant: "service_first", layout_variant: "construction", color_theme: "black-orange", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "project" },
+      { design_variant_id: "construction-modern", structure_variant: "story_driven", layout_variant: "construction", color_theme: "architectural-clean", hero_style: "split", section_order: ["trust", "experience", "services", "cta"], card_style: "editorial", visual_density: "minimal", accent_style: "premium", image_style: "cinematic" },
     ],
     restaurant: [
-      { design_variant_id: "restaurant-warm", layout_variant: "restaurant", color_theme: "cream-amber", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "rounded", visual_density: "rich", accent_style: "warm", image_style: "gallery" },
-      { design_variant_id: "restaurant-elegant", layout_variant: "restaurant", color_theme: "dark-luxury", hero_style: "editorial", section_order: ["services", "experience", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
-      { design_variant_id: "restaurant-modern", layout_variant: "restaurant", color_theme: "minimal-white", hero_style: "minimal", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
-      { design_variant_id: "restaurant-cozy", layout_variant: "restaurant", color_theme: "warm-cafe", hero_style: "split", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "balanced", accent_style: "warm", image_style: "editorial" },
+      { design_variant_id: "restaurant-warm", structure_variant: "gallery_first", layout_variant: "restaurant", color_theme: "cream-amber", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "rounded", visual_density: "rich", accent_style: "warm", image_style: "gallery" },
+      { design_variant_id: "restaurant-elegant", structure_variant: "editorial", layout_variant: "restaurant", color_theme: "dark-luxury", hero_style: "editorial", section_order: ["services", "experience", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "restaurant-modern", structure_variant: "cta_focused", layout_variant: "restaurant", color_theme: "minimal-white", hero_style: "minimal", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "restaurant-cozy", structure_variant: "story_driven", layout_variant: "restaurant", color_theme: "warm-cafe", hero_style: "split", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "balanced", accent_style: "warm", image_style: "editorial" },
     ],
     beauty: [
-      { design_variant_id: "beauty-luxury", layout_variant: "beauty", color_theme: "rose-cream", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
-      { design_variant_id: "beauty-modern", layout_variant: "beauty", color_theme: "white-black", hero_style: "minimal", section_order: ["services", "experience", "trust", "cta"], card_style: "sharp", visual_density: "minimal", accent_style: "bold", image_style: "clean" },
-      { design_variant_id: "beauty-glam", layout_variant: "beauty", color_theme: "bold-rose", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "gallery" },
-      { design_variant_id: "beauty-soft", layout_variant: "beauty", color_theme: "pastel", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "editorial" },
+      { design_variant_id: "beauty-luxury", structure_variant: "editorial", layout_variant: "beauty", color_theme: "rose-cream", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "beauty-modern", structure_variant: "cta_focused", layout_variant: "beauty", color_theme: "white-black", hero_style: "minimal", section_order: ["services", "experience", "trust", "cta"], card_style: "sharp", visual_density: "minimal", accent_style: "bold", image_style: "clean" },
+      { design_variant_id: "beauty-glam", structure_variant: "gallery_first", layout_variant: "beauty", color_theme: "bold-rose", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "gallery" },
+      { design_variant_id: "beauty-soft", structure_variant: "trust_first", layout_variant: "beauty", color_theme: "pastel", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "editorial" },
     ],
     auto: [
-      { design_variant_id: "auto-technical", layout_variant: "auto", color_theme: "gray-blue", hero_style: "service", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "clean" },
-      { design_variant_id: "auto-bold", layout_variant: "auto", color_theme: "dark-blue", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
-      { design_variant_id: "auto-clean", layout_variant: "auto", color_theme: "white-blue", hero_style: "split", section_order: ["services", "experience", "trust", "cta"], card_style: "rounded", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
-      { design_variant_id: "auto-garage", layout_variant: "auto", color_theme: "industrial", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "technical", image_style: "project" },
+      { design_variant_id: "auto-technical", structure_variant: "service_first", layout_variant: "auto", color_theme: "gray-blue", hero_style: "service", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "clean" },
+      { design_variant_id: "auto-bold", structure_variant: "trust_first", layout_variant: "auto", color_theme: "dark-blue", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
+      { design_variant_id: "auto-clean", structure_variant: "cta_focused", layout_variant: "auto", color_theme: "white-blue", hero_style: "split", section_order: ["services", "experience", "trust", "cta"], card_style: "rounded", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "auto-garage", structure_variant: "classic", layout_variant: "auto", color_theme: "industrial", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "technical", image_style: "project" },
     ],
     professional: [
-      { design_variant_id: "professional-clean", layout_variant: "professional", color_theme: "slate-blue", hero_style: "split", section_order: ["services", "trust", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
-      { design_variant_id: "professional-bold", layout_variant: "professional", color_theme: "charcoal", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
-      { design_variant_id: "professional-premium", layout_variant: "professional", color_theme: "navy-gold", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
-      { design_variant_id: "professional-local", layout_variant: "professional", color_theme: "warm-local", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "warm", image_style: "gallery" },
+      { design_variant_id: "professional-clean", structure_variant: "classic", layout_variant: "professional", color_theme: "slate-blue", hero_style: "split", section_order: ["services", "trust", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "professional-bold", structure_variant: "service_first", layout_variant: "professional", color_theme: "charcoal", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
+      { design_variant_id: "professional-premium", structure_variant: "story_driven", layout_variant: "professional", color_theme: "navy-gold", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "professional-local", structure_variant: "cta_focused", layout_variant: "professional", color_theme: "warm-local", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "warm", image_style: "gallery" },
     ],
   };
   return pools[layout];
 }
-function varyDesignVariant(base: DesignVariant, previous: PreviousDesign[]): DesignVariant {
+
+function getStructureSectionOrder(structureVariant: StructureVariant, _layoutVariant: LayoutVariant, previous: PreviousDesign[] = []) {
+  const orders = structureSectionOrders[structureVariant] || structureSectionOrders.classic;
   const usedOrders = new Set(previous.map((item) => JSON.stringify(item.section_order || [])));
+  const available = orders.filter((order) => !usedOrders.has(JSON.stringify(order)));
+  return [...pickRandom(available.length ? available : orders)];
+}
+
+function getPreferredStructureVariants(industry: string): StructureVariant[] {
+  if (matchesIndustry(industry, ["dental", "dentist", "orthodont", "clinic", "medical", "health"])) return ["trust_first", "classic", "cta_focused", "service_first"];
+  if (matchesIndustry(industry, ["construction", "contractor", "remodel", "renovation", "builder", "roofing", "plumb", "electric"])) return ["project_showcase", "service_first", "story_driven", "cta_focused"];
+  if (matchesIndustry(industry, ["restaurant", "cafe", "coffee", "food", "bar", "bistro"])) return ["gallery_first", "editorial", "story_driven", "cta_focused"];
+  if (matchesIndustry(industry, ["salon", "beauty", "spa", "hair", "barber", "nail", "esthetic"])) return ["editorial", "gallery_first", "cta_focused", "trust_first"];
+  if (matchesIndustry(industry, ["auto", "mechanic", "vehicle", "car", "repair", "garage", "tire"])) return ["service_first", "trust_first", "cta_focused", "classic"];
+  return ["classic", "service_first", "story_driven", "cta_focused"];
+}
+function varyDesignVariant(base: DesignVariant, previous: PreviousDesign[]): DesignVariant {
   const usedHeroes = new Set(previous.map((item) => item.hero_style).filter(Boolean));
   const usedCards = new Set(previous.map((item) => item.card_style).filter(Boolean));
   return {
     ...base,
-    section_order: pickRandom(sectionOrders.filter((order) => !usedOrders.has(JSON.stringify(order))).length ? sectionOrders.filter((order) => !usedOrders.has(JSON.stringify(order))) : sectionOrders),
+    section_order: getStructureSectionOrder(base.structure_variant, base.layout_variant, previous),
     hero_style: pickRandom(heroStyles.filter((item) => !usedHeroes.has(item)).length ? heroStyles.filter((item) => !usedHeroes.has(item)) : heroStyles),
     card_style: pickRandom(cardStyles.filter((item) => !usedCards.has(item)).length ? cardStyles.filter((item) => !usedCards.has(item)) : cardStyles),
     visual_density: pickRandom(densityStyles),
     accent_style: pickRandom(accentStyles),
   };
 }
-function selectDesignVariant(layout: LayoutVariant, previous: PreviousDesign[]): DesignVariant {
-  const pool = getDesignVariantPools(layout);
-  const used = new Set(previous.map((item) => item.design_variant_id).filter(Boolean));
-  const available = pool.filter((item) => !used.has(item.design_variant_id));
-  const selected = pickRandom(available.length ? available : pool);
-  return available.length ? selected : varyDesignVariant(selected, previous);
+function selectDesignVariant(layout: LayoutVariant, previous: PreviousDesign[], industry = ""): DesignVariant {
+  const preferred = getPreferredStructureVariants(industry);
+  const usedDesigns = new Set(previous.map((item) => item.design_variant_id).filter(Boolean));
+  const usedStructures = new Set(previous.map((item) => item.structure_variant).filter(Boolean));
+  const layoutPool = getDesignVariantPools(layout);
+  const preferredPool = layoutPool.filter((item) => preferred.includes(item.structure_variant));
+  const pool = preferredPool.length ? preferredPool : layoutPool;
+  const preferredUnused = pool.filter((item) => !usedStructures.has(item.structure_variant));
+  const designUnused = (preferredUnused.length ? preferredUnused : pool).filter((item) => !usedDesigns.has(item.design_variant_id));
+  const selected = pickRandom(designUnused.length ? designUnused : preferredUnused.length ? preferredUnused : pool);
+  const shouldVary = !designUnused.length || usedStructures.has(selected.structure_variant);
+  const variant = shouldVary ? varyDesignVariant(selected, previous) : selected;
+  return { ...variant, section_order: getStructureSectionOrder(variant.structure_variant, variant.layout_variant, previous) };
 }
 
 type WebsitePreviewData = {
@@ -191,10 +221,11 @@ function asVisualTheme(value: unknown, fallback: VisualTheme): VisualTheme {
   const theme = value as Record<string, unknown>;
   return {
     design_variant_id: asString(theme.design_variant_id, fallback.design_variant_id),
+    structure_variant: asEnum(theme.structure_variant, fallback.structure_variant, structureVariants),
     layout_variant: asEnum(theme.layout_variant, fallback.layout_variant, ["medical", "construction", "restaurant", "beauty", "auto", "professional"]),
     color_theme: asString(theme.color_theme, fallback.color_theme),
     hero_style: asEnum(theme.hero_style, fallback.hero_style, heroStyles),
-    section_order: asStringArray(theme.section_order, fallback.section_order).filter((item) => ["services", "experience", "trust", "cta"].includes(item)).slice(0, 4),
+    section_order: asStringArray(theme.section_order, fallback.section_order).filter((item) => (allowedSections as readonly string[]).includes(item) && item !== "hero").slice(0, 7),
     card_style: asEnum(theme.card_style, fallback.card_style, cardStyles),
     visual_density: asEnum(theme.visual_density, fallback.visual_density, densityStyles),
     accent_style: asEnum(theme.accent_style, fallback.accent_style, accentStyles),
@@ -343,6 +374,7 @@ function extractPreviousDesigns(rows: Array<{ preview_data: unknown }> | null): 
     const theme = data?.visual_theme || {};
     return {
       design_variant_id: asString(theme.design_variant_id),
+      structure_variant: asString(theme.structure_variant) as StructureVariant,
       layout_variant: asString(theme.layout_variant) as LayoutVariant,
       color_theme: asString(theme.color_theme),
       hero_style: asString(theme.hero_style) as HeroStyle,
@@ -357,7 +389,7 @@ function extractPreviousDesigns(rows: Array<{ preview_data: unknown }> | null): 
 
 function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: DesignVariant): WebsitePreviewData {
   const industryContent = getIndustryWebsiteContent(lead.industry || "", lead.location);
-  const design = selectedDesign || selectDesignVariant(getLayoutVariant(lead.industry || ""), []);
+  const design = selectedDesign || selectDesignVariant(getLayoutVariant(lead.industry || ""), [], lead.industry || "");
   const homepage = audit?.seo_content_pack?.homepage_copy;
   const homepageHeadline = homepage?.headline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.headline) ? homepage.headline : industryContent.hero;
   const homepageSubheadline = homepage?.subheadline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.subheadline) ? homepage.subheadline : `Welcome to ${lead.business_name}, a modern ${lead.industry || "local business"} experience built around trust, clarity, and customer care${lead.location ? ` in ${lead.location}` : ""}.`;
@@ -415,7 +447,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
     const previousDesigns = extractPreviousDesigns(previousPreviewRows as Array<{ preview_data: unknown }> | null);
-    const selectedDesign = selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns);
+    const selectedDesign = selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns, typedLead.industry || "");
 
     const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
@@ -458,8 +490,13 @@ ${JSON.stringify(previousDesigns)}
 
 Design variation rules:
 - Create a new website design variation.
+- Return visual_theme.structure_variant and a full visual_theme.section_order.
+- visual_theme.structure_variant must be one of: classic, service_first, gallery_first, story_driven, trust_first, cta_focused, editorial, project_showcase.
+- visual_theme.section_order must contain 5 to 7 sections selected from: trust, services, service_detail, about, story, process, projects, gallery, experience, testimonial, testimonials, why_us, cta, contact, quote_cta, featured_service.
+- Do not return only 3 sections. Do not include hero in section_order because the hero is rendered separately.
+- Make this preview feel structurally different from previous designs.
 - Do not repeat the previous design variants.
-- Do not reuse the same section order if possible.
+- Do not repeat the same section_order from previous previews.
 - Do not reuse the same hero style if possible.
 - Do not reuse the same card style if possible.
 - Keep the content industry-specific, but change the design structure and visual feeling.
