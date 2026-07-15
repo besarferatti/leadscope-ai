@@ -153,5 +153,11 @@ export interface WebsitePreviewData {
     website: string;
     location: string;
   };
-  local_seo_angle?: string;
+  visual_theme?: {
+    industry_style: string;
+    hero_visual_title: string;
+    hero_visual_description: string;
+    image_keywords: string[];
+    gallery_cards: Array<{ title: string; description: string }>;
+  };
 }
