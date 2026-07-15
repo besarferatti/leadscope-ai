@@ -22,6 +22,30 @@ function errorResponse(message: string, status = 400) {
 type WebsiteStatus = "has_website" | "no_website" | "social_only";
 type WebsiteStatusFilter = "all" | WebsiteStatus;
 
+type GooglePlace = {
+  name: string;
+  formatted_address?: string;
+  geometry?: { location: { lat: number; lng: number } };
+  rating?: number;
+  user_ratings_total?: number;
+  place_id?: string;
+  types?: string[];
+  primaryType?: string;
+  primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
+  website?: string;
+  international_phone_number?: string;
+  formatted_phone_number?: string;
+};
+
+type TextSearchPage = {
+  results: GooglePlace[];
+  nextPageToken?: string;
+};
+
+const GOOGLE_PLACES_PAGE_SIZE = 20;
+const DEFAULT_MAX_PAGES = 3;
+const DEFAULT_MAX_RESULTS_SCANNED = 60;
+
 const WEBSITE_STATUS_FILTERS = new Set<WebsiteStatusFilter>([
   "all",
   "has_website",
@@ -194,62 +218,193 @@ Deno.serve(async (req: Request) => {
       return errorResponse("Google Places API key is not configured on the server.", 500);
     }
 
-    // Call Google Places Text Search API
-    const query = encodeURIComponent(`${niche} in ${location}`);
-    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
+    const maxPages = DEFAULT_MAX_PAGES;
+    const maxResultsScanned = DEFAULT_MAX_RESULTS_SCANNED;
 
-    const placesRes = await fetch(placesUrl);
+    async function fetchPlacesPage(pageToken?: string): Promise<TextSearchPage> {
+      const fields = [
+        "places.id",
+        "places.displayName",
+        "places.formattedAddress",
+        "places.location",
+        "places.rating",
+        "places.userRatingCount",
+        "places.types",
+        "places.primaryType",
+        "places.primaryTypeDisplayName",
+        "places.websiteUri",
+        "places.nationalPhoneNumber",
+        "places.internationalPhoneNumber",
+        "nextPageToken",
+      ].join(",");
 
-    if (!placesRes.ok) {
-      return errorResponse(`Google Places request failed (HTTP ${placesRes.status})`, 502);
-    }
+      const placesRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": fields,
+        },
+        body: JSON.stringify({
+          textQuery: `${niche} in ${location}`,
+          pageSize: GOOGLE_PLACES_PAGE_SIZE,
+          ...(pageToken ? { pageToken } : {}),
+        }),
+      });
 
-    const placesData = await placesRes.json() as {
-      status: string;
-      error_message?: string;
-      results?: Array<{
-        name: string;
-        formatted_address?: string;
-        geometry?: { location: { lat: number; lng: number } };
-        rating?: number;
-        user_ratings_total?: number;
-        place_id?: string;
-        types?: string[];
-        primaryType?: string;
-        primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
-        website?: string;
-        international_phone_number?: string;
-        formatted_phone_number?: string;
-      }>;
-    };
+      if (!placesRes.ok) {
+        let googleMessage = "";
+        try {
+          const errorData = await placesRes.json() as { error?: { message?: string; status?: string } };
+          googleMessage = errorData.error?.message ?? errorData.error?.status ?? "";
+        } catch {
+          // Use the generic HTTP error below.
+        }
 
-    // Map Google Places API status to friendly errors
-    if (placesData.status === "REQUEST_DENIED") {
-      const msg = placesData.error_message ?? "";
-      if (msg.includes("not activated") || msg.includes("not enabled")) {
-        return errorResponse("Google Places API is not enabled. Enable it in Google Cloud Console.", 422);
+        if (placesRes.status === 403) {
+          if (googleMessage.includes("not activated") || googleMessage.includes("not enabled")) {
+            throw new Error("Google Places API is not enabled. Enable it in Google Cloud Console.");
+          }
+          if (googleMessage.includes("billing") || googleMessage.includes("payment")) {
+            throw new Error("Google billing is not active. Enable billing in Google Cloud Console.");
+          }
+          throw new Error(`Google Places API key is invalid or rejected${googleMessage ? `: ${googleMessage}` : "."}`);
+        }
+
+        if (placesRes.status === 429) {
+          throw new Error("Google Places API quota exceeded. Check your billing or limits.");
+        }
+
+        throw new Error(`Google Places request failed (HTTP ${placesRes.status})${googleMessage ? `: ${googleMessage}` : ""}`);
       }
-      if (msg.includes("billing") || msg.includes("payment")) {
-        return errorResponse("Google billing is not active. Enable billing in Google Cloud Console.", 422);
+
+      const placesData = await placesRes.json() as {
+        places?: Array<{
+          id?: string;
+          displayName?: { text?: string; languageCode?: string } | string;
+          formattedAddress?: string;
+          location?: { latitude: number; longitude: number };
+          rating?: number;
+          userRatingCount?: number;
+          types?: string[];
+          primaryType?: string;
+          primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
+          websiteUri?: string;
+          nationalPhoneNumber?: string;
+          internationalPhoneNumber?: string;
+        }>;
+        nextPageToken?: string;
+      };
+
+      return {
+        results: (placesData.places ?? []).map((place) => ({
+          name: typeof place.displayName === "string" ? place.displayName : place.displayName?.text ?? "",
+          formatted_address: place.formattedAddress,
+          geometry: place.location
+            ? { location: { lat: place.location.latitude, lng: place.location.longitude } }
+            : undefined,
+          rating: place.rating,
+          user_ratings_total: place.userRatingCount,
+          place_id: place.id,
+          types: place.types,
+          primaryType: place.primaryType,
+          primaryTypeDisplayName: place.primaryTypeDisplayName,
+          website: place.websiteUri,
+          formatted_phone_number: place.nationalPhoneNumber,
+          international_phone_number: place.internationalPhoneNumber,
+        })).filter((place) => Boolean(place.name)),
+        nextPageToken: placesData.nextPageToken,
+      };
+    }
+
+    async function fetchPlaceDetails(place: GooglePlace): Promise<GooglePlace> {
+      if (!place.place_id) return place;
+
+      try {
+        const newDetailsUrl = `https://places.googleapis.com/v1/places/${place.place_id}`;
+        const newDetailsRes = await fetch(newDetailsUrl, {
+          headers: {
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "primaryType,primaryTypeDisplayName,types,websiteUri,nationalPhoneNumber,internationalPhoneNumber",
+          },
+        });
+
+        if (newDetailsRes.ok) {
+          const newDetails = await newDetailsRes.json() as {
+            primaryType?: string;
+            primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
+            types?: string[];
+            websiteUri?: string;
+            nationalPhoneNumber?: string;
+            internationalPhoneNumber?: string;
+          };
+
+          place = {
+            ...place,
+            primaryType: newDetails.primaryType ?? place.primaryType,
+            primaryTypeDisplayName: newDetails.primaryTypeDisplayName ?? place.primaryTypeDisplayName,
+            types: newDetails.types ?? place.types,
+            website: newDetails.websiteUri ?? place.website,
+            formatted_phone_number: newDetails.nationalPhoneNumber ?? place.formatted_phone_number,
+            international_phone_number: newDetails.internationalPhoneNumber ?? place.international_phone_number,
+          };
+        }
+      } catch {
+        // Fall back to legacy details below.
       }
-      return errorResponse(`Google Places API key is invalid or rejected: ${msg}`, 422);
+
+      try {
+        const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,url,types&key=${apiKey}`;
+        const detailRes = await fetch(detailUrl);
+        if (!detailRes.ok) return place;
+        const detailData = await detailRes.json() as { status: string; result?: GooglePlace };
+        if (detailData.status === "OK" && detailData.result) {
+          return { ...place, ...detailData.result };
+        }
+      } catch {
+        // fall through to original place data
+      }
+
+      return place;
     }
 
-    if (placesData.status === "OVER_QUERY_LIMIT") {
-      return errorResponse("Google Places API quota exceeded. Check your billing or limits.", 429);
+    const detailedResults: GooglePlace[] = [];
+    let pageToken: string | undefined;
+    let pages_fetched = 0;
+    let scanned = 0;
+    let matched_website_status = 0;
+    let filtered_out_by_website_status = 0;
+
+    while (pages_fetched < maxPages && scanned < maxResultsScanned) {
+      const page = await fetchPlacesPage(pageToken);
+      pages_fetched++;
+
+      const remainingScanSlots = maxResultsScanned - scanned;
+      const pageResults = page.results.slice(0, remainingScanSlots);
+      scanned += pageResults.length;
+
+      const detailedPageResults = await Promise.all(pageResults.map(fetchPlaceDetails));
+
+      for (const place of detailedPageResults) {
+        const leadWebsite = (place.website ?? "").trim();
+        const websiteStatus = getWebsiteStatus(leadWebsite);
+
+        if (matchesWebsiteStatusFilter(websiteStatus, websiteStatusFilter)) {
+          matched_website_status++;
+          detailedResults.push(place);
+        } else {
+          filtered_out_by_website_status++;
+        }
+      }
+
+      if (!page.nextPageToken || scanned >= maxResultsScanned) {
+        break;
+      }
+
+      pageToken = page.nextPageToken;
     }
 
-    if (placesData.status === "INVALID_REQUEST") {
-      return errorResponse("Invalid request to Google Places API. Check your search query.", 422);
-    }
-
-    if (placesData.status !== "OK" && placesData.status !== "ZERO_RESULTS") {
-      return errorResponse(`Google Places error: ${placesData.status}${placesData.error_message ? " — " + placesData.error_message : ""}`, 502);
-    }
-
-    const results = placesData.results ?? [];
-
-    if (results.length === 0) {
+    if (scanned === 0) {
       // Update search status to completed even if no results
       await supabase
         .from("lead_searches")
@@ -262,64 +417,12 @@ Deno.serve(async (req: Request) => {
         updated: 0,
         skipped: 0,
         filtered_out_by_website_status: 0,
+        pages_fetched,
+        scanned,
+        matched_website_status,
         message: "No leads found for this search query.",
       });
     }
-
-    // For each place, fetch details to get website & phone (Places Text Search doesn't include them)
-    // We'll do details fetches in parallel (up to 20 results)
-    const topResults = results.slice(0, 20);
-
-    const detailedResults = await Promise.all(
-      topResults.map(async (place) => {
-        if (!place.place_id) return place;
-        try {
-          const newDetailsUrl = `https://places.googleapis.com/v1/places/${place.place_id}`;
-          const newDetailsRes = await fetch(newDetailsUrl, {
-            headers: {
-              "X-Goog-Api-Key": apiKey,
-              "X-Goog-FieldMask": "primaryType,primaryTypeDisplayName,types,websiteUri,nationalPhoneNumber,internationalPhoneNumber",
-            },
-          });
-
-          if (newDetailsRes.ok) {
-            const newDetails = await newDetailsRes.json() as {
-              primaryType?: string;
-              primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
-              types?: string[];
-              websiteUri?: string;
-              nationalPhoneNumber?: string;
-              internationalPhoneNumber?: string;
-            };
-
-            place = {
-              ...place,
-              primaryType: newDetails.primaryType,
-              primaryTypeDisplayName: newDetails.primaryTypeDisplayName,
-              types: newDetails.types ?? place.types,
-              website: newDetails.websiteUri ?? place.website,
-              formatted_phone_number: newDetails.nationalPhoneNumber ?? place.formatted_phone_number,
-              international_phone_number: newDetails.internationalPhoneNumber ?? place.international_phone_number,
-            };
-          }
-        } catch {
-          // Fall back to legacy details below.
-        }
-
-        try {
-          const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,url,types&key=${apiKey}`;
-          const detailRes = await fetch(detailUrl);
-          if (!detailRes.ok) return place;
-          const detailData = await detailRes.json() as { status: string; result?: typeof place };
-          if (detailData.status === "OK" && detailData.result) {
-            return { ...place, ...detailData.result };
-          }
-        } catch {
-          // fall through to original place data
-        }
-        return place;
-      })
-    );
 
     // Fetch existing leads for this user to check duplicates
     const { data: existingLeads } = await supabase
@@ -367,17 +470,9 @@ Deno.serve(async (req: Request) => {
     let inserted = 0;
     let updated = 0;
     let skipped = 0;
-    let filtered_out_by_website_status = 0;
-
     for (const place of detailedResults) {
-      const leadWebsite = ((place as { website?: string }).website ?? "").trim();
+      const leadWebsite = (place.website ?? "").trim();
       const website = normalizeKey(leadWebsite);
-      const websiteStatus = getWebsiteStatus(leadWebsite);
-
-      if (!matchesWebsiteStatusFilter(websiteStatus, websiteStatusFilter)) {
-        filtered_out_by_website_status++;
-        continue;
-      }
 
       const address = (place.formatted_address ?? "").trim();
       const mapsUrl = place.place_id
@@ -501,7 +596,15 @@ Deno.serve(async (req: Request) => {
       .eq("id", search_id)
       .eq("user_id", user.id);
 
-    return jsonResponse({ inserted, updated, skipped, filtered_out_by_website_status });
+    return jsonResponse({
+      inserted,
+      updated,
+      skipped,
+      filtered_out_by_website_status,
+      pages_fetched,
+      scanned,
+      matched_website_status,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Something went wrong while searching.";
     return errorResponse(message, 500);
