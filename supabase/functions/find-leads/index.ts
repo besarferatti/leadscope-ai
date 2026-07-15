@@ -77,6 +77,8 @@ Deno.serve(async (req: Request) => {
         user_ratings_total?: number;
         place_id?: string;
         types?: string[];
+        primaryType?: string;
+        primaryTypeDisplayName?: { text?: string; languageCode?: string };
         website?: string;
         international_phone_number?: string;
         formatted_phone_number?: string;
@@ -128,6 +130,39 @@ Deno.serve(async (req: Request) => {
       topResults.map(async (place) => {
         if (!place.place_id) return place;
         try {
+          const newDetailsUrl = `https://places.googleapis.com/v1/places/${place.place_id}`;
+          const newDetailsRes = await fetch(newDetailsUrl, {
+            headers: {
+              "X-Goog-Api-Key": apiKey,
+              "X-Goog-FieldMask": "primaryType,primaryTypeDisplayName,types,websiteUri,nationalPhoneNumber,internationalPhoneNumber",
+            },
+          });
+
+          if (newDetailsRes.ok) {
+            const newDetails = await newDetailsRes.json() as {
+              primaryType?: string;
+              primaryTypeDisplayName?: { text?: string; languageCode?: string };
+              types?: string[];
+              websiteUri?: string;
+              nationalPhoneNumber?: string;
+              internationalPhoneNumber?: string;
+            };
+
+            place = {
+              ...place,
+              primaryType: newDetails.primaryType,
+              primaryTypeDisplayName: newDetails.primaryTypeDisplayName,
+              types: newDetails.types ?? place.types,
+              website: newDetails.websiteUri ?? place.website,
+              formatted_phone_number: newDetails.nationalPhoneNumber ?? place.formatted_phone_number,
+              international_phone_number: newDetails.internationalPhoneNumber ?? place.international_phone_number,
+            };
+          }
+        } catch {
+          // Fall back to legacy details below.
+        }
+
+        try {
           const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,url,types&key=${apiKey}`;
           const detailRes = await fetch(detailUrl);
           if (!detailRes.ok) return place;
@@ -173,9 +208,28 @@ Deno.serve(async (req: Request) => {
       if (website && existingWebsites.has(website)) { skipped++; continue; }
       if (existingNameAddress.has(nameAddr)) { skipped++; continue; }
 
-      // Derive a best-guess industry from place types
       const types = place.types ?? [];
-      const industry = deriveIndustry(types, niche);
+      const googlePrimaryType = (place as { primaryType?: string }).primaryType;
+      const googlePrimaryTypeDisplayName = (place as { primaryTypeDisplayName?: { text?: string } })
+        .primaryTypeDisplayName?.text;
+      const leadWebsite = ((place as { website?: string }).website ?? "").trim();
+      const industry = determineLeadIndustry({
+        businessName: place.name,
+        selectedNiche: niche,
+        googlePrimaryType,
+        googlePrimaryTypeDisplayName,
+        googleTypes: types,
+        website: leadWebsite,
+      });
+
+      console.log("Lead industry classification", {
+        businessName: place.name,
+        selectedNiche: niche,
+        googlePrimaryType,
+        googlePrimaryTypeDisplayName,
+        googleTypes: types,
+        normalizedIndustry: industry,
+      });
 
       // Build Google Maps URL from place_id
       const mapsUrl = place.place_id
@@ -186,8 +240,6 @@ Deno.serve(async (req: Request) => {
         .international_phone_number
         ?? (place as { formatted_phone_number?: string }).formatted_phone_number
         ?? "";
-
-      const leadWebsite = ((place as { website?: string }).website ?? "").trim();
 
       toInsert.push({
         user_id: user.id,
@@ -234,53 +286,124 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function deriveIndustry(types: string[], niche: string): string {
-  // Map common Google Places types to friendly industry names
+type IndustryClassificationInput = {
+  businessName: string;
+  selectedNiche: string;
+  googlePrimaryType?: string;
+  googlePrimaryTypeDisplayName?: string;
+  googleTypes: string[];
+  website?: string;
+};
+
+const BROAD_CONSTRUCTION_TYPES = new Set(["contractor", "general_contractor", "construction", "construction_company"]);
+
+function determineLeadIndustry({
+  businessName,
+  selectedNiche,
+  googlePrimaryType,
+  googlePrimaryTypeDisplayName,
+  googleTypes,
+  website,
+}: IndustryClassificationInput): string {
+  const selectedIndustry = normalizeLeadIndustry(selectedNiche);
+
+  // Prefer Google's human-readable primary category when it is specific. If it is broad
+  // construction/contractor language, preserve a more specific selected search niche.
+  const displayIndustry = normalizeLeadIndustry(googlePrimaryTypeDisplayName);
+  if (displayIndustry && displayIndustry !== "Construction Services") {
+    return displayIndustry;
+  }
+
+  if (selectedIndustry) return selectedIndustry;
+  if (displayIndustry) return displayIndustry;
+
+  const primaryTypeIndustry = normalizeLeadIndustry(googlePrimaryType);
+  if (primaryTypeIndustry) return primaryTypeIndustry;
+
+  for (const type of googleTypes) {
+    const typeIndustry = normalizeLeadIndustry(type);
+    if (typeIndustry) return typeIndustry;
+  }
+
+  const keywordFallback = normalizeLeadIndustry(`${businessName} ${website ?? ""}`);
+  if (keywordFallback) return keywordFallback;
+
+  const nicheWord = selectedNiche.trim().split(/\s+/)[0] ?? "";
+  return nicheWord ? nicheWord.charAt(0).toUpperCase() + nicheWord.slice(1).toLowerCase() : "Other";
+}
+
+function isSpecificTradeIndustry(industry?: string): boolean {
+  return industry === "HVAC Services"
+    || industry === "Electrical Services"
+    || industry === "Plumbing Services"
+    || industry === "Roofing Services";
+}
+
+function normalizeLeadIndustry(input?: string): string | undefined {
+  if (!input) return undefined;
+  const value = input.toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (!value) return undefined;
+
+  // Specific trades must be checked before construction so labels like
+  // "HVAC contractor" do not collapse into generic construction.
+  if (matchesAny(value, ["hvac", "heating", "cooling", "air conditioning", "air conditioner", "furnace", "ac repair", "ventilation", "climate control"])) {
+    return "HVAC Services";
+  }
+  if (matchesAny(value, ["electrician", "electrical", "wiring", "panel", "lighting", "breaker", "electrical installation service"])) {
+    return "Electrical Services";
+  }
+  if (matchesAny(value, ["plumbing", "plumber", "pipe", "drain", "leak", "water heater", "plumbing service"])) {
+    return "Plumbing Services";
+  }
+  if (matchesAny(value, ["roofing", "roofer", "roof", "gutter", "roofing contractor"])) {
+    return "Roofing Services";
+  }
+  if (matchesAny(value, ["construction", "general contractor", "contractor", "builder", "renovation", "remodel", "concrete", "masonry", "construction company"])) {
+    return "Construction Services";
+  }
+
   const typeMap: Record<string, string> = {
-    dentist: "Dental",
+    dentist: "Dental Clinic",
+    dental: "Dental Clinic",
+    "dental clinic": "Dental Clinic",
     doctor: "Medical",
     hospital: "Medical",
     health: "Medical",
     lawyer: "Legal",
-    real_estate_agency: "Real Estate",
+    "real estate agency": "Real Estate",
     restaurant: "Restaurant",
     food: "Restaurant",
     gym: "Fitness",
-    beauty_salon: "Beauty & Spa",
-    spa: "Beauty & Spa",
-    hair_care: "Beauty & Spa",
-    car_dealer: "Automotive",
-    car_repair: "Automotive",
-    general_contractor: "Construction",
-    plumber: "Plumbing",
-    electrician: "Plumbing",
-    locksmith: "Construction",
+    "beauty salon": "Beauty Salon",
+    spa: "Beauty Salon",
+    "hair care": "Beauty Salon",
+    "car dealer": "Auto Repair",
+    "car repair": "Auto Repair",
+    "auto repair": "Auto Repair",
     school: "Education",
     university: "Education",
     accounting: "Accounting",
-    insurance_agency: "Insurance",
+    "insurance agency": "Insurance",
     photographer: "Photography",
-    clothing_store: "Retail",
+    "clothing store": "Retail",
     store: "Retail",
     florist: "Retail",
-    home_goods_store: "Retail",
-    pet_store: "Retail",
+    "home goods store": "Retail",
+    "pet store": "Retail",
     supermarket: "Retail",
     pharmacy: "Medical",
     physiotherapist: "Medical",
-    veterinary_care: "Medical",
-    travel_agency: "Events",
-    event_venue: "Events",
-    moving_company: "Cleaning",
+    "veterinary care": "Medical",
+    "travel agency": "Events",
+    "event venue": "Events",
+    "moving company": "Moving",
     cleaning: "Cleaning",
   };
 
-  for (const type of types) {
-    const match = typeMap[type];
-    if (match) return match;
-  }
+  if (BROAD_CONSTRUCTION_TYPES.has(value)) return "Construction Services";
+  return typeMap[value];
+}
 
-  // Fall back to capitalised niche keyword
-  const nicheWord = niche.trim().split(/\s+/)[0];
-  return nicheWord.charAt(0).toUpperCase() + nicheWord.slice(1).toLowerCase();
+function matchesAny(value: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => value.includes(keyword));
 }
