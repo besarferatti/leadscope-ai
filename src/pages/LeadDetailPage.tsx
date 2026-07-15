@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink,
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
-  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2, Monitor,
+  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2, Monitor, Bookmark, BookmarkCheck,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -227,6 +227,14 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     setShareLoading(false);
   }
 
+  async function handleToggleSaved() {
+    if (!lead) return;
+    const savedAt = lead.saved_at ? null : new Date().toISOString();
+    const { error } = await supabase.from('leads').update({ saved_at: savedAt }).eq('id', leadId);
+    if (error) setError(error.message);
+    else setLead(prev => prev ? { ...prev, saved_at: savedAt } : prev);
+  }
+
   async function updateStatus(status: LeadStatus) {
     if (!lead) return;
     const { error } = await supabase.from('leads').update({ status }).eq('id', leadId);
@@ -282,6 +290,14 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleToggleSaved}
+            className={lead.saved_at ? 'btn-secondary text-xs py-2 text-blue-200' : 'btn-secondary text-xs py-2'}
+            title={lead.saved_at ? 'Remove from Saved' : 'Save Lead'}
+          >
+            {lead.saved_at ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+            {lead.saved_at ? 'Saved' : 'Save Lead'}
+          </button>
           <ScoreBadge score={lead.lead_score} size="lg" />
           <div>
             <p className="text-slate-500 text-xs mb-1">Status</p>
@@ -361,6 +377,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
               <div className="flex justify-between">
                 <span className="text-slate-500">Status</span>
                 <StatusBadge status={lead.status} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Saved</span>
+                <span className={lead.saved_at ? 'text-blue-300' : 'text-slate-500'}>{lead.saved_at ? formatDate(lead.saved_at) : 'No'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Lead Score</span>

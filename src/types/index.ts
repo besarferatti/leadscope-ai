@@ -39,6 +39,7 @@ export interface Lead {
   google_maps_url: string;
   lead_score: number;
   status: LeadStatus;
+  saved_at?: string | null;
   created_at: string;
 }
 
