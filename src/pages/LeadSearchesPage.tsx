@@ -36,7 +36,15 @@ const defaultForm = {
 interface FindLeadsState {
   loading: boolean;
   error: string;
-  result: { inserted: number; updated: number; skipped: number; filtered_out_by_website_status: number } | null;
+  result: {
+    inserted: number;
+    updated: number;
+    skipped: number;
+    filtered_out_by_website_status: number;
+    pages_fetched: number;
+    scanned: number;
+    matched_website_status: number;
+  } | null;
 }
 
 export function LeadSearchesPage({ onNavigate }: Props) {
@@ -144,6 +152,9 @@ export function LeadSearchesPage({ onNavigate }: Props) {
         updated?: number;
         skipped?: number;
         filtered_out_by_website_status?: number;
+        pages_fetched?: number;
+        scanned?: number;
+        matched_website_status?: number;
         message?: string;
       };
 
@@ -159,6 +170,9 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       const skipped = json.skipped ?? 0;
       const updated = json.updated ?? 0;
       const filtered_out_by_website_status = json.filtered_out_by_website_status ?? 0;
+      const pages_fetched = json.pages_fetched ?? 0;
+      const scanned = json.scanned ?? 0;
+      const matched_website_status = json.matched_website_status ?? 0;
 
       // Increment usage
       if (inserted > 0 && user && !isAdmin(profile)) {
@@ -166,13 +180,30 @@ export function LeadSearchesPage({ onNavigate }: Props) {
         await refreshProfile();
       }
 
-      trackEvent('lead_search_completed', { search_id: search.id, inserted, updated, skipped, filtered_out_by_website_status });
+      trackEvent('lead_search_completed', {
+        search_id: search.id,
+        inserted,
+        updated,
+        skipped,
+        filtered_out_by_website_status,
+        pages_fetched,
+        scanned,
+        matched_website_status,
+      });
       setFindState(prev => ({
         ...prev,
         [search.id]: {
           loading: false,
           error: '',
-          result: { inserted, updated, skipped, filtered_out_by_website_status },
+          result: {
+            inserted,
+            updated,
+            skipped,
+            filtered_out_by_website_status,
+            pages_fetched,
+            scanned,
+            matched_website_status,
+          },
         },
       }));
       setSearches(prev => prev.map(s => s.id === search.id ? { ...s, status: 'completed' } : s));
@@ -306,8 +337,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
                   <div className="flex items-center gap-2 p-3 mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                     <p className="text-emerald-300 text-xs">
                       {fs.result.inserted === 0
-                        ? `No leads saved for this query${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}.`
-                        : `${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} found${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}. Redirecting…`}
+                        ? `No leads saved · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}.`
+                        : `Saved ${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}. Redirecting…`}
                     </p>
                   </div>
                 )}
