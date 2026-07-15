@@ -56,15 +56,15 @@ type PreviousDesign = Partial<DesignVariant>;
 
 const allowedSections = ["trust", "services", "service_detail", "about", "story", "process", "projects", "gallery", "experience", "testimonial", "testimonials", "why_us", "cta", "contact", "quote_cta", "featured_service"] as const;
 const structureVariants: StructureVariant[] = ["classic", "service_first", "gallery_first", "story_driven", "trust_first", "cta_focused", "editorial", "project_showcase"];
-const structureSectionOrders: Record<StructureVariant, string[][]> = {
-  classic: [["trust", "services", "about", "gallery", "why_us", "contact"], ["services", "trust", "about", "testimonial", "gallery", "contact"]],
-  service_first: [["services", "service_detail", "why_us", "testimonial", "contact"], ["services", "featured_service", "process", "trust", "contact"]],
-  gallery_first: [["gallery", "services", "experience", "testimonial", "contact"], ["gallery", "featured_service", "story", "services", "contact"]],
-  story_driven: [["about", "story", "process", "services", "trust", "contact"], ["story", "about", "services", "gallery", "testimonial", "contact"]],
-  trust_first: [["trust", "testimonial", "services", "about", "contact"], ["trust", "why_us", "services", "testimonial", "contact"]],
-  cta_focused: [["cta", "services", "why_us", "gallery", "contact"], ["cta", "featured_service", "trust", "services", "quote_cta"]],
-  editorial: [["story", "featured_service", "gallery", "services", "contact"], ["about", "story", "gallery", "testimonial", "contact"]],
-  project_showcase: [["projects", "process", "services", "why_us", "quote_cta"], ["projects", "gallery", "process", "trust", "contact"]],
+const STRUCTURE_ORDERS: Record<StructureVariant, string[]> = {
+  classic: ["trust", "services", "about", "gallery", "why_us", "contact"],
+  service_first: ["services", "service_detail", "why_us", "testimonial", "contact"],
+  gallery_first: ["gallery", "services", "experience", "testimonial", "contact"],
+  story_driven: ["about", "story", "process", "services", "trust", "contact"],
+  trust_first: ["trust", "testimonial", "services", "about", "contact"],
+  cta_focused: ["cta", "services", "why_us", "gallery", "contact"],
+  editorial: ["story", "featured_service", "gallery", "services", "contact"],
+  project_showcase: ["projects", "process", "services", "why_us", "quote_cta"],
 };
 const heroStyles: HeroStyle[] = ["split", "bold", "gallery", "editorial", "minimal", "magazine", "service"];
 const cardStyles: CardStyle[] = ["rounded", "sharp", "glass", "editorial", "bordered", "shadow"];
@@ -114,11 +114,24 @@ function getDesignVariantPools(layout: LayoutVariant): DesignVariant[] {
   return pools[layout];
 }
 
-function getStructureSectionOrder(structureVariant: StructureVariant, _layoutVariant: LayoutVariant, previous: PreviousDesign[] = []) {
-  const orders = structureSectionOrders[structureVariant] || structureSectionOrders.classic;
-  const usedOrders = new Set(previous.map((item) => JSON.stringify(item.section_order || [])));
-  const available = orders.filter((order) => !usedOrders.has(JSON.stringify(order)));
-  return [...pickRandom(available.length ? available : orders)];
+function normalizeSectionOrder(value: unknown, selectedStructureVariant: StructureVariant) {
+  const fallback = STRUCTURE_ORDERS[selectedStructureVariant] || STRUCTURE_ORDERS.classic;
+  const allowed = new Set<string>(allowedSections);
+  if (!Array.isArray(value)) return [...fallback];
+
+  const normalized = value.filter((item): item is string => typeof item === "string" && allowed.has(item) && item !== "hero");
+  const deduped = [...new Set(normalized)].slice(0, 7);
+  if (deduped.length < 5) return [...fallback];
+
+  const finalCta = deduped.find((item) => item === "contact" || item === "quote_cta") || fallback.find((item) => item === "contact" || item === "quote_cta") || "contact";
+  const withoutFinalCta = deduped.filter((item) => item !== finalCta);
+  const withFinalCta = [...withoutFinalCta, finalCta].slice(0, 7);
+  if (!withFinalCta.includes(finalCta)) withFinalCta[withFinalCta.length - 1] = finalCta;
+  return withFinalCta;
+}
+
+function getStructureSectionOrder(structureVariant: StructureVariant) {
+  return normalizeSectionOrder(STRUCTURE_ORDERS[structureVariant], structureVariant);
 }
 
 function getPreferredStructureVariants(industry: string): StructureVariant[] {
@@ -134,13 +147,20 @@ function varyDesignVariant(base: DesignVariant, previous: PreviousDesign[]): Des
   const usedCards = new Set(previous.map((item) => item.card_style).filter(Boolean));
   return {
     ...base,
-    section_order: getStructureSectionOrder(base.structure_variant, base.layout_variant, previous),
+    section_order: getStructureSectionOrder(base.structure_variant),
     hero_style: pickRandom(heroStyles.filter((item) => !usedHeroes.has(item)).length ? heroStyles.filter((item) => !usedHeroes.has(item)) : heroStyles),
     card_style: pickRandom(cardStyles.filter((item) => !usedCards.has(item)).length ? cardStyles.filter((item) => !usedCards.has(item)) : cardStyles),
     visual_density: pickRandom(densityStyles),
     accent_style: pickRandom(accentStyles),
   };
 }
+function selectStructureVariant(industry: string, previous: PreviousDesign[]): StructureVariant {
+  const preferred = getPreferredStructureVariants(industry);
+  const usedStructures = new Set(previous.map((item) => item.structure_variant).filter(Boolean));
+  const unused = preferred.filter((item) => !usedStructures.has(item));
+  return pickRandom(unused.length ? unused : preferred);
+}
+
 function selectDesignVariant(layout: LayoutVariant, previous: PreviousDesign[], industry = ""): DesignVariant {
   const preferred = getPreferredStructureVariants(industry);
   const usedDesigns = new Set(previous.map((item) => item.design_variant_id).filter(Boolean));
@@ -153,7 +173,7 @@ function selectDesignVariant(layout: LayoutVariant, previous: PreviousDesign[], 
   const selected = pickRandom(designUnused.length ? designUnused : preferredUnused.length ? preferredUnused : pool);
   const shouldVary = !designUnused.length || usedStructures.has(selected.structure_variant);
   const variant = shouldVary ? varyDesignVariant(selected, previous) : selected;
-  return { ...variant, section_order: getStructureSectionOrder(variant.structure_variant, variant.layout_variant, previous) };
+  return { ...variant, section_order: getStructureSectionOrder(variant.structure_variant) };
 }
 
 type WebsitePreviewData = {
@@ -225,7 +245,7 @@ function asVisualTheme(value: unknown, fallback: VisualTheme): VisualTheme {
     layout_variant: asEnum(theme.layout_variant, fallback.layout_variant, ["medical", "construction", "restaurant", "beauty", "auto", "professional"]),
     color_theme: asString(theme.color_theme, fallback.color_theme),
     hero_style: asEnum(theme.hero_style, fallback.hero_style, heroStyles),
-    section_order: asStringArray(theme.section_order, fallback.section_order).filter((item) => (allowedSections as readonly string[]).includes(item) && item !== "hero").slice(0, 7),
+    section_order: normalizeSectionOrder(theme.section_order, fallback.structure_variant),
     card_style: asEnum(theme.card_style, fallback.card_style, cardStyles),
     visual_density: asEnum(theme.visual_density, fallback.visual_density, densityStyles),
     accent_style: asEnum(theme.accent_style, fallback.accent_style, accentStyles),
@@ -447,7 +467,13 @@ Deno.serve(async (req: Request) => {
 
     const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
     const previousDesigns = extractPreviousDesigns(previousPreviewRows as Array<{ preview_data: unknown }> | null);
-    const selectedDesign = selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns, typedLead.industry || "");
+    const selectedStructureVariant = selectStructureVariant(typedLead.industry || "", previousDesigns);
+    const selectedSectionOrder = normalizeSectionOrder(STRUCTURE_ORDERS[selectedStructureVariant], selectedStructureVariant);
+    const selectedDesign = {
+      ...selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns, typedLead.industry || ""),
+      structure_variant: selectedStructureVariant,
+      section_order: selectedSectionOrder,
+    };
 
     const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
@@ -484,6 +510,12 @@ Hard rules:
 
 Selected design direction to follow:
 ${JSON.stringify(selectedDesign)}
+
+The selected structure_variant is: ${selectedStructureVariant}
+The selected section_order is: ${selectedSectionOrder.join(", ")}
+You must follow this structure.
+Do not return a shorter section_order.
+Do not return only services/experience/trust/cta.
 
 Previous designs to avoid:
 ${JSON.stringify(previousDesigns)}
@@ -538,6 +570,8 @@ Return raw JSON only with this exact safe public shape and no extra keys: ${JSON
     }
 
     previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
+    previewData.visual_theme.structure_variant = selectedStructureVariant;
+    previewData.visual_theme.section_order = normalizeSectionOrder(selectedSectionOrder, selectedStructureVariant);
 
     const preview_token = createPreviewToken();
     const { data: saved, error: insertError } = await serviceClient.from("website_previews").insert({ lead_id, user_id: user.id, preview_token, preview_data: previewData }).select("preview_token, preview_data, created_at").single();
