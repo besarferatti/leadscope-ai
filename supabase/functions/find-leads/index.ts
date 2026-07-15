@@ -18,6 +18,73 @@ function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
 
+
+type WebsiteStatus = "has_website" | "no_website" | "social_only";
+type WebsiteStatusFilter = "all" | WebsiteStatus;
+
+const WEBSITE_STATUS_FILTERS = new Set<WebsiteStatusFilter>([
+  "all",
+  "has_website",
+  "no_website",
+  "social_only",
+]);
+
+const SOCIAL_ONLY_WEBSITE_HOSTS = [
+  "instagram.com",
+  "facebook.com",
+  "fb.com",
+  "tiktok.com",
+  "linkedin.com",
+  "linktr.ee",
+  "beacons.ai",
+  "business.site",
+  "maps.app.goo.gl",
+];
+
+const SOCIAL_ONLY_WEBSITE_PATHS = [
+  "google.com/maps",
+  "maps.app.goo.gl",
+];
+
+function getWebsiteHost(website: string) {
+  const normalized = website.trim().replace(/^mailto:/i, "");
+  try {
+    return new URL(normalized.match(/^https?:\/\//i) ? normalized : `https://${normalized}`)
+      .hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function getWebsiteStatus(website?: string | null): WebsiteStatus {
+  const trimmedWebsite = website?.trim();
+
+  if (!trimmedWebsite) return "no_website";
+
+  const lowerWebsite = trimmedWebsite.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "");
+  const host = getWebsiteHost(trimmedWebsite);
+
+  if (
+    SOCIAL_ONLY_WEBSITE_PATHS.some((path) => lowerWebsite.includes(path))
+    || SOCIAL_ONLY_WEBSITE_HOSTS.some((socialHost) => host === socialHost || host.endsWith(`.${socialHost}`))
+  ) {
+    return "social_only";
+  }
+
+  return "has_website";
+}
+
+function normalizeWebsiteStatusFilter(value?: string | null): WebsiteStatusFilter {
+  const normalized = normalizeKey(value) as WebsiteStatusFilter;
+  return WEBSITE_STATUS_FILTERS.has(normalized) ? normalized : "all";
+}
+
+function matchesWebsiteStatusFilter(status: WebsiteStatus, filter: WebsiteStatusFilter) {
+  return filter === "all" || status === filter;
+}
+
 function normalizeKey(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -113,8 +180,9 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
-    const body = await req.json() as { search_id: string; niche: string; location: string };
+    const body = await req.json() as { search_id: string; niche: string; location: string; website_status_filter?: string };
     const { search_id, niche, location } = body;
+    const websiteStatusFilter = normalizeWebsiteStatusFilter(body.website_status_filter);
 
     if (!search_id || !niche || !location) {
       return errorResponse("search_id, niche, and location are required");
@@ -189,7 +257,13 @@ Deno.serve(async (req: Request) => {
         .eq("id", search_id)
         .eq("user_id", user.id);
 
-      return jsonResponse({ inserted: 0, skipped: 0, message: "No leads found for this search query." });
+      return jsonResponse({
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        filtered_out_by_website_status: 0,
+        message: "No leads found for this search query.",
+      });
     }
 
     // For each place, fetch details to get website & phone (Places Text Search doesn't include them)
@@ -293,10 +367,18 @@ Deno.serve(async (req: Request) => {
     let inserted = 0;
     let updated = 0;
     let skipped = 0;
+    let filtered_out_by_website_status = 0;
 
     for (const place of detailedResults) {
       const leadWebsite = ((place as { website?: string }).website ?? "").trim();
       const website = normalizeKey(leadWebsite);
+      const websiteStatus = getWebsiteStatus(leadWebsite);
+
+      if (!matchesWebsiteStatusFilter(websiteStatus, websiteStatusFilter)) {
+        filtered_out_by_website_status++;
+        continue;
+      }
+
       const address = (place.formatted_address ?? "").trim();
       const mapsUrl = place.place_id
         ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
@@ -419,7 +501,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", search_id)
       .eq("user_id", user.id);
 
-    return jsonResponse({ inserted, updated, skipped });
+    return jsonResponse({ inserted, updated, skipped, filtered_out_by_website_status });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Something went wrong while searching.";
     return errorResponse(message, 500);
