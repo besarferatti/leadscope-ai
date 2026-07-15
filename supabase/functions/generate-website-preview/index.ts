@@ -24,13 +24,107 @@ type Audit = {
   } | null;
 };
 
+type LayoutVariant = "medical" | "construction" | "restaurant" | "beauty" | "auto" | "professional";
+type HeroStyle = "split" | "bold" | "gallery" | "editorial" | "minimal" | "magazine" | "service";
+type CardStyle = "rounded" | "sharp" | "glass" | "editorial" | "bordered" | "shadow";
+type VisualDensity = "minimal" | "balanced" | "rich";
+type AccentStyle = "soft" | "bold" | "premium" | "warm" | "technical";
+type ImageStyle = "clean" | "cinematic" | "editorial" | "project" | "gallery" | "luxury";
+
 type VisualTheme = {
+  design_variant_id: string;
+  layout_variant: LayoutVariant;
+  color_theme: string;
+  hero_style: HeroStyle;
+  section_order: string[];
+  card_style: CardStyle;
+  visual_density: VisualDensity;
+  accent_style: AccentStyle;
+  image_style: ImageStyle;
   industry_style: string;
   hero_visual_title: string;
   hero_visual_description: string;
   image_keywords: string[];
-  gallery_cards: Array<{ title: string; description: string }>;
+  gallery_cards: Array<{ title: string; description: string; image_prompt?: string; image_alt?: string }>;
+  image_sections: Array<{ title: string; description: string; image_alt: string; visual_type: "hero" | "gallery" | "service" | "trust" | "cta" }>;
 };
+
+type DesignVariant = Pick<VisualTheme, "design_variant_id" | "layout_variant" | "color_theme" | "hero_style" | "section_order" | "card_style" | "visual_density" | "accent_style" | "image_style">;
+type PreviousDesign = Partial<DesignVariant>;
+
+const sectionOrders = [
+  ["services", "experience", "trust", "cta"],
+  ["experience", "services", "trust", "cta"],
+  ["trust", "services", "experience", "cta"],
+  ["services", "trust", "experience", "cta"],
+];
+const heroStyles: HeroStyle[] = ["split", "bold", "gallery", "editorial", "minimal", "magazine", "service"];
+const cardStyles: CardStyle[] = ["rounded", "sharp", "glass", "editorial", "bordered", "shadow"];
+const densityStyles: VisualDensity[] = ["minimal", "balanced", "rich"];
+const accentStyles: AccentStyle[] = ["soft", "bold", "premium", "warm", "technical"];
+
+function pickRandom<T>(items: T[]): T { return items[crypto.getRandomValues(new Uint32Array(1))[0] % items.length]; }
+function getDesignVariantPools(layout: LayoutVariant): DesignVariant[] {
+  const pools: Record<LayoutVariant, DesignVariant[]> = {
+    medical: [
+      { design_variant_id: "medical-clean", layout_variant: "medical", color_theme: "white-blue", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "medical-premium", layout_variant: "medical", color_theme: "navy-white", hero_style: "editorial", section_order: ["services", "trust", "experience", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "premium", image_style: "editorial" },
+      { design_variant_id: "medical-soft", layout_variant: "medical", color_theme: "light-blue-cream", hero_style: "minimal", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "medical-modern", layout_variant: "medical", color_theme: "bright-minimal", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "bold", image_style: "gallery" },
+    ],
+    construction: [
+      { design_variant_id: "construction-bold", layout_variant: "construction", color_theme: "dark-amber", hero_style: "bold", section_order: ["experience", "services", "trust", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "project" },
+      { design_variant_id: "construction-projects", layout_variant: "construction", color_theme: "white-gray", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "gallery" },
+      { design_variant_id: "construction-industrial", layout_variant: "construction", color_theme: "black-orange", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "project" },
+      { design_variant_id: "construction-modern", layout_variant: "construction", color_theme: "architectural-clean", hero_style: "split", section_order: ["trust", "experience", "services", "cta"], card_style: "editorial", visual_density: "minimal", accent_style: "premium", image_style: "cinematic" },
+    ],
+    restaurant: [
+      { design_variant_id: "restaurant-warm", layout_variant: "restaurant", color_theme: "cream-amber", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "rounded", visual_density: "rich", accent_style: "warm", image_style: "gallery" },
+      { design_variant_id: "restaurant-elegant", layout_variant: "restaurant", color_theme: "dark-luxury", hero_style: "editorial", section_order: ["services", "experience", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "restaurant-modern", layout_variant: "restaurant", color_theme: "minimal-white", hero_style: "minimal", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "restaurant-cozy", layout_variant: "restaurant", color_theme: "warm-cafe", hero_style: "split", section_order: ["experience", "trust", "services", "cta"], card_style: "glass", visual_density: "balanced", accent_style: "warm", image_style: "editorial" },
+    ],
+    beauty: [
+      { design_variant_id: "beauty-luxury", layout_variant: "beauty", color_theme: "rose-cream", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "beauty-modern", layout_variant: "beauty", color_theme: "white-black", hero_style: "minimal", section_order: ["services", "experience", "trust", "cta"], card_style: "sharp", visual_density: "minimal", accent_style: "bold", image_style: "clean" },
+      { design_variant_id: "beauty-glam", layout_variant: "beauty", color_theme: "bold-rose", hero_style: "gallery", section_order: ["experience", "trust", "services", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "bold", image_style: "gallery" },
+      { design_variant_id: "beauty-soft", layout_variant: "beauty", color_theme: "pastel", hero_style: "split", section_order: ["trust", "services", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "editorial" },
+    ],
+    auto: [
+      { design_variant_id: "auto-technical", layout_variant: "auto", color_theme: "gray-blue", hero_style: "service", section_order: ["services", "trust", "experience", "cta"], card_style: "bordered", visual_density: "balanced", accent_style: "technical", image_style: "clean" },
+      { design_variant_id: "auto-bold", layout_variant: "auto", color_theme: "dark-blue", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
+      { design_variant_id: "auto-clean", layout_variant: "auto", color_theme: "white-blue", hero_style: "split", section_order: ["services", "experience", "trust", "cta"], card_style: "rounded", visual_density: "minimal", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "auto-garage", layout_variant: "auto", color_theme: "industrial", hero_style: "gallery", section_order: ["experience", "services", "trust", "cta"], card_style: "shadow", visual_density: "rich", accent_style: "technical", image_style: "project" },
+    ],
+    professional: [
+      { design_variant_id: "professional-clean", layout_variant: "professional", color_theme: "slate-blue", hero_style: "split", section_order: ["services", "trust", "experience", "cta"], card_style: "rounded", visual_density: "balanced", accent_style: "soft", image_style: "clean" },
+      { design_variant_id: "professional-bold", layout_variant: "professional", color_theme: "charcoal", hero_style: "bold", section_order: ["trust", "services", "experience", "cta"], card_style: "sharp", visual_density: "rich", accent_style: "bold", image_style: "cinematic" },
+      { design_variant_id: "professional-premium", layout_variant: "professional", color_theme: "navy-gold", hero_style: "editorial", section_order: ["experience", "services", "trust", "cta"], card_style: "editorial", visual_density: "balanced", accent_style: "premium", image_style: "luxury" },
+      { design_variant_id: "professional-local", layout_variant: "professional", color_theme: "warm-local", hero_style: "service", section_order: ["services", "experience", "trust", "cta"], card_style: "glass", visual_density: "minimal", accent_style: "warm", image_style: "gallery" },
+    ],
+  };
+  return pools[layout];
+}
+function varyDesignVariant(base: DesignVariant, previous: PreviousDesign[]): DesignVariant {
+  const usedOrders = new Set(previous.map((item) => JSON.stringify(item.section_order || [])));
+  const usedHeroes = new Set(previous.map((item) => item.hero_style).filter(Boolean));
+  const usedCards = new Set(previous.map((item) => item.card_style).filter(Boolean));
+  return {
+    ...base,
+    section_order: pickRandom(sectionOrders.filter((order) => !usedOrders.has(JSON.stringify(order))).length ? sectionOrders.filter((order) => !usedOrders.has(JSON.stringify(order))) : sectionOrders),
+    hero_style: pickRandom(heroStyles.filter((item) => !usedHeroes.has(item)).length ? heroStyles.filter((item) => !usedHeroes.has(item)) : heroStyles),
+    card_style: pickRandom(cardStyles.filter((item) => !usedCards.has(item)).length ? cardStyles.filter((item) => !usedCards.has(item)) : cardStyles),
+    visual_density: pickRandom(densityStyles),
+    accent_style: pickRandom(accentStyles),
+  };
+}
+function selectDesignVariant(layout: LayoutVariant, previous: PreviousDesign[]): DesignVariant {
+  const pool = getDesignVariantPools(layout);
+  const used = new Set(previous.map((item) => item.design_variant_id).filter(Boolean));
+  const available = pool.filter((item) => !used.has(item.design_variant_id));
+  const selected = pickRandom(available.length ? available : pool);
+  return available.length ? selected : varyDesignVariant(selected, previous);
+}
 
 type WebsitePreviewData = {
   business_name: string;
@@ -78,19 +172,39 @@ function asGalleryCards(value: unknown, fallback: VisualTheme["gallery_cards"]) 
   if (!Array.isArray(value)) return fallback;
   const cards = value
     .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object" && !Array.isArray(item))
-    .map((item) => ({ title: asString(item.title), description: asString(item.description) }))
+    .map((item) => ({ title: asString(item.title), description: asString(item.description), image_prompt: asString(item.image_prompt), image_alt: asString(item.image_alt) }))
     .filter((item) => item.title || item.description);
   return cards.length > 0 ? cards.slice(0, 4) : fallback;
 }
+function asImageSections(value: unknown, fallback: VisualTheme["image_sections"]) {
+  if (!Array.isArray(value)) return fallback;
+  const allowed = new Set(["hero", "gallery", "service", "trust", "cta"]);
+  const sections = value
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object" && !Array.isArray(item))
+    .map((item) => ({ title: asString(item.title), description: asString(item.description), image_alt: asString(item.image_alt), visual_type: allowed.has(asString(item.visual_type)) ? asString(item.visual_type) as VisualTheme["image_sections"][number]["visual_type"] : "gallery" }))
+    .filter((item) => item.title || item.description || item.image_alt);
+  return sections.length > 0 ? sections.slice(0, 5) : fallback;
+}
+function asEnum<T extends string>(value: unknown, fallback: T, allowed: readonly T[]): T { return typeof value === "string" && (allowed as readonly string[]).includes(value) ? value as T : fallback; }
 function asVisualTheme(value: unknown, fallback: VisualTheme): VisualTheme {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return fallback;
   const theme = value as Record<string, unknown>;
   return {
+    design_variant_id: asString(theme.design_variant_id, fallback.design_variant_id),
+    layout_variant: asEnum(theme.layout_variant, fallback.layout_variant, ["medical", "construction", "restaurant", "beauty", "auto", "professional"]),
+    color_theme: asString(theme.color_theme, fallback.color_theme),
+    hero_style: asEnum(theme.hero_style, fallback.hero_style, heroStyles),
+    section_order: asStringArray(theme.section_order, fallback.section_order).filter((item) => ["services", "experience", "trust", "cta"].includes(item)).slice(0, 4),
+    card_style: asEnum(theme.card_style, fallback.card_style, cardStyles),
+    visual_density: asEnum(theme.visual_density, fallback.visual_density, densityStyles),
+    accent_style: asEnum(theme.accent_style, fallback.accent_style, accentStyles),
+    image_style: asEnum(theme.image_style, fallback.image_style, ["clean", "cinematic", "editorial", "project", "gallery", "luxury"]),
     industry_style: asString(theme.industry_style, fallback.industry_style),
     hero_visual_title: asString(theme.hero_visual_title, fallback.hero_visual_title),
     hero_visual_description: asString(theme.hero_visual_description, fallback.hero_visual_description),
     image_keywords: asStringArray(theme.image_keywords, fallback.image_keywords).slice(0, 8),
     gallery_cards: asGalleryCards(theme.gallery_cards, fallback.gallery_cards),
+    image_sections: asImageSections(theme.image_sections, fallback.image_sections),
   };
 }
 function asContact(value: unknown, fallback: WebsitePreviewData["contact"]) {
@@ -214,8 +328,36 @@ function getIndustryWebsiteContent(industry: string, location: string) {
   };
 }
 
-function fallbackPreview(lead: Lead, audit: Audit | null): WebsitePreviewData {
+function getLayoutVariant(industry: string): LayoutVariant {
+  if (matchesIndustry(industry, ["dental", "dentist", "orthodont", "clinic", "medical", "health"])) return "medical";
+  if (matchesIndustry(industry, ["construction", "contractor", "remodel", "renovation", "builder", "roofing", "plumb", "electric"])) return "construction";
+  if (matchesIndustry(industry, ["restaurant", "cafe", "coffee", "food", "bar", "bistro"])) return "restaurant";
+  if (matchesIndustry(industry, ["salon", "beauty", "spa", "hair", "barber", "nail", "esthetic"])) return "beauty";
+  if (matchesIndustry(industry, ["auto", "mechanic", "vehicle", "car", "repair", "garage", "tire"])) return "auto";
+  return "professional";
+}
+
+function extractPreviousDesigns(rows: Array<{ preview_data: unknown }> | null): PreviousDesign[] {
+  return (rows || []).map((row) => {
+    const data = row.preview_data as { visual_theme?: Record<string, unknown> } | null;
+    const theme = data?.visual_theme || {};
+    return {
+      design_variant_id: asString(theme.design_variant_id),
+      layout_variant: asString(theme.layout_variant) as LayoutVariant,
+      color_theme: asString(theme.color_theme),
+      hero_style: asString(theme.hero_style) as HeroStyle,
+      section_order: asStringArray(theme.section_order),
+      card_style: asString(theme.card_style) as CardStyle,
+      visual_density: asString(theme.visual_density) as VisualDensity,
+      accent_style: asString(theme.accent_style) as AccentStyle,
+      image_style: asString(theme.image_style) as ImageStyle,
+    };
+  });
+}
+
+function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: DesignVariant): WebsitePreviewData {
   const industryContent = getIndustryWebsiteContent(lead.industry || "", lead.location);
+  const design = selectedDesign || selectDesignVariant(getLayoutVariant(lead.industry || ""), []);
   const homepage = audit?.seo_content_pack?.homepage_copy;
   const homepageHeadline = homepage?.headline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.headline) ? homepage.headline : industryContent.hero;
   const homepageSubheadline = homepage?.subheadline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.subheadline) ? homepage.subheadline : `Welcome to ${lead.business_name}, a modern ${lead.industry || "local business"} experience built around trust, clarity, and customer care${lead.location ? ` in ${lead.location}` : ""}.`;
@@ -233,11 +375,16 @@ function fallbackPreview(lead: Lead, audit: Audit | null): WebsitePreviewData {
     about_intro: `${lead.business_name} helps customers feel confident from the first visit with attentive service, thoughtful recommendations, and a polished experience tailored to ${lead.industry || "local"} needs${lead.location ? ` in ${lead.location}` : ""}.`,
     contact: { headline: `Ready to get started with ${lead.business_name}?`, body: `Reach out today to ask a question or ${industryContent.cta.toLowerCase()}.`, website: lead.website, location: lead.location },
     visual_theme: {
+      ...design,
       industry_style: industryContent.style,
       hero_visual_title: `${lead.industry || "Business"} experience`,
       hero_visual_description: industryContent.style,
       image_keywords: [lead.industry, lead.location, ...industryContent.services.map((service) => service.title)].filter(Boolean).slice(0, 8),
-      gallery_cards: industryContent.gallery,
+      gallery_cards: industryContent.gallery.map((card) => ({ ...card, image_alt: `${card.title} for ${lead.business_name}` })),
+      image_sections: [
+        { title: "Hero visual", description: industryContent.style, image_alt: `${lead.business_name} ${lead.industry} hero visual`, visual_type: "hero" },
+        ...industryContent.gallery.slice(0, 3).map((card) => ({ title: card.title, description: card.description, image_alt: `${card.title} visual`, visual_type: "gallery" as const })),
+      ],
     },
   };
 }
@@ -266,9 +413,13 @@ Deno.serve(async (req: Request) => {
     const typedLead = lead as Lead;
     if ((profile as UserProfile).role !== "admin" && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
+    const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
+    const previousDesigns = extractPreviousDesigns(previousPreviewRows as Array<{ preview_data: unknown }> | null);
+    const selectedDesign = selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns);
+
     const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
-    let previewData = fallbackPreview(typedLead, typedAudit);
+    let previewData = fallbackPreview(typedLead, typedAudit, selectedDesign);
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
     if (openaiApiKey) {
@@ -299,6 +450,39 @@ Hard rules:
 - If keyword suggestions fit naturally, use them in public headings/copy without mentioning keywords or SEO.
 - Do not expose suggested_pricing or internal SEO strategy.
 
+Selected design direction to follow:
+${JSON.stringify(selectedDesign)}
+
+Previous designs to avoid:
+${JSON.stringify(previousDesigns)}
+
+Design variation rules:
+- Create a new website design variation.
+- Do not repeat the previous design variants.
+- Do not reuse the same section order if possible.
+- Do not reuse the same hero style if possible.
+- Do not reuse the same card style if possible.
+- Keep the content industry-specific, but change the design structure and visual feeling.
+- This preview is for the business’s real customers.
+- Do not create an SEO audit, agency pitch, LeadScope page, SEO package, technical SEO section, content optimization section, or internal strategy.
+
+Use SEO/audit insights only as hidden improvement context:
+- stronger CTA
+- better service sections
+- clearer homepage copy
+- trust-building sections
+- local customer-facing keywords naturally in copy
+
+Never expose:
+- suggested_pricing
+- SEO package
+- technical SEO
+- audit
+- LeadScope
+- AI website preview
+- meta title suggestion
+- local SEO angle
+
 Return raw JSON only with this exact safe public shape and no extra keys: ${JSON.stringify(previewData)}`;
       const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -316,7 +500,7 @@ Return raw JSON only with this exact safe public shape and no extra keys: ${JSON
       }
     }
 
-    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit));
+    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
 
     const preview_token = createPreviewToken();
     const { data: saved, error: insertError } = await serviceClient.from("website_previews").insert({ lead_id, user_id: user.id, preview_token, preview_data: previewData }).select("preview_token, preview_data, created_at").single();

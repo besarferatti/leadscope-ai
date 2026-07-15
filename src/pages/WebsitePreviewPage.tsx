@@ -16,6 +16,15 @@ const gradientByIndustry = (industry = '') => {
 };
 
 const fallbackVisualTheme = (preview: WebsitePreviewData) => ({
+  design_variant_id: 'professional-clean',
+  layout_variant: 'professional' as const,
+  color_theme: 'slate-blue',
+  hero_style: 'split' as const,
+  section_order: ['services', 'experience', 'trust', 'cta'],
+  card_style: 'rounded' as const,
+  visual_density: 'balanced' as const,
+  accent_style: 'soft' as const,
+  image_style: 'clean' as const,
   industry_style: 'Premium local business visuals, polished cards, warm customer-focused design',
   hero_visual_title: `${preview.industry || 'Business'} experience`,
   hero_visual_description: 'A refined visual direction with modern placeholders for customer moments, service details, and trusted local expertise.',
@@ -26,6 +35,52 @@ const fallbackVisualTheme = (preview: WebsitePreviewData) => ({
     { title: 'Quality in Detail', description: 'Premium placeholders that highlight care, process, and results.' },
   ],
 });
+
+type VisualTheme = NonNullable<WebsitePreviewData['visual_theme']>;
+
+function getThemeClasses(visualTheme: VisualTheme) {
+  const theme = visualTheme.color_theme || visualTheme.layout_variant || 'professional';
+  if (/dark|black|charcoal|industrial/.test(theme)) return { page: 'bg-slate-950 text-white', header: 'border-white/10 bg-slate-950/85 text-white', hero: 'from-slate-950 via-slate-900 to-amber-950', accent: 'bg-amber-500 text-slate-950', muted: 'text-slate-300', panel: 'bg-white/10 border-white/10' };
+  if (/rose|pastel|beauty/.test(theme)) return { page: 'bg-rose-50 text-slate-950', header: 'border-rose-100 bg-rose-50/85', hero: 'from-rose-100 via-white to-fuchsia-100', accent: 'bg-rose-600 text-white', muted: 'text-slate-600', panel: 'bg-white/75 border-rose-100' };
+  if (/amber|cafe|warm|restaurant|cream/.test(theme)) return { page: 'bg-amber-50 text-stone-950', header: 'border-amber-100 bg-amber-50/85', hero: 'from-amber-100 via-orange-50 to-stone-100', accent: 'bg-amber-700 text-white', muted: 'text-stone-600', panel: 'bg-white/75 border-amber-100' };
+  if (/blue|medical|auto|navy/.test(theme)) return { page: 'bg-blue-50 text-slate-950', header: 'border-blue-100 bg-white/85', hero: 'from-blue-100 via-white to-cyan-100', accent: 'bg-blue-700 text-white', muted: 'text-slate-600', panel: 'bg-white/80 border-blue-100' };
+  return { page: 'bg-white text-slate-950', header: 'border-slate-200 bg-white/85', hero: 'from-slate-50 via-white to-blue-100', accent: 'bg-slate-950 text-white', muted: 'text-slate-600', panel: 'bg-white/80 border-slate-200' };
+}
+
+function getCardClasses(visualTheme: VisualTheme) {
+  const base = 'transition-all hover:-translate-y-1';
+  switch (visualTheme.card_style) {
+    case 'sharp': return `${base} rounded-none border border-slate-900/20 bg-white p-6 shadow-none`;
+    case 'glass': return `${base} rounded-[2rem] border border-white/40 bg-white/50 p-6 shadow-xl shadow-slate-900/5 backdrop-blur`;
+    case 'editorial': return `${base} rounded-sm border-l-4 border-slate-950 bg-white p-7 shadow-sm`;
+    case 'bordered': return `${base} rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-none`;
+    case 'shadow': return `${base} rounded-[1.5rem] border border-transparent bg-white p-6 shadow-2xl shadow-slate-900/15`;
+    default: return `${base} rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm`;
+  }
+}
+
+function getHeroLayout(visualTheme: VisualTheme) {
+  if (visualTheme.hero_style === 'bold') return 'lg:grid-cols-1 text-center';
+  if (visualTheme.hero_style === 'gallery' || visualTheme.hero_style === 'magazine') return 'lg:grid-cols-[0.75fr_1.25fr]';
+  if (visualTheme.hero_style === 'minimal') return 'lg:grid-cols-[1.2fr_0.8fr]';
+  if (visualTheme.hero_style === 'editorial') return 'lg:grid-cols-[0.9fr_1.1fr]';
+  return 'lg:grid-cols-[1fr_0.95fr]';
+}
+
+function getSectionOrder(visualTheme: VisualTheme) {
+  const safe = ['services', 'experience', 'trust', 'cta'];
+  const chosen = (visualTheme.section_order || []).filter((item) => safe.includes(item));
+  return [...chosen, ...safe.filter((item) => !chosen.includes(item))];
+}
+
+function getVisualBlockStyle(visualTheme: VisualTheme) {
+  if (visualTheme.image_style === 'luxury') return 'from-stone-950 via-rose-900 to-amber-700';
+  if (visualTheme.image_style === 'project') return 'from-stone-900 via-zinc-700 to-amber-500';
+  if (visualTheme.image_style === 'gallery') return 'from-fuchsia-700 via-orange-400 to-amber-200';
+  if (visualTheme.image_style === 'cinematic') return 'from-slate-950 via-blue-950 to-cyan-700';
+  if (visualTheme.image_style === 'editorial') return 'from-slate-800 via-stone-500 to-rose-200';
+  return 'from-slate-900 via-slate-700 to-slate-400';
+}
 
 export function WebsitePreviewPage({ token }: Props) {
   const [preview, setPreview] = useState<WebsitePreviewData | null>(null);
@@ -66,10 +121,15 @@ export function WebsitePreviewPage({ token }: Props) {
     'Quality-focused service from start to finish',
   ];
   const galleryCards = visualTheme.gallery_cards?.length ? visualTheme.gallery_cards : fallbackVisualTheme(preview).gallery_cards;
+  const themeClasses = getThemeClasses(visualTheme);
+  const cardClasses = getCardClasses(visualTheme);
+  const sectionOrder = getSectionOrder(visualTheme);
+  const sectionRank = (name: string) => sectionOrder.indexOf(name);
+  const visualBlockStyle = getVisualBlockStyle(visualTheme);
 
   return (
-    <main className="min-h-screen bg-white text-slate-950">
-      <header className="sticky top-0 z-20 border-b border-white/70 bg-white/85 backdrop-blur-xl">
+    <main className={`flex min-h-screen flex-col ${themeClasses.page}`}>
+      <header className={`sticky top-0 z-20 border-b backdrop-blur-xl ${themeClasses.header}`}>
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <a href="#home" className="text-lg font-black tracking-tight text-slate-950">{preview.business_name}</a>
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
@@ -78,14 +138,14 @@ export function WebsitePreviewPage({ token }: Props) {
             <a href="#trust" className="hover:text-slate-950">Reviews</a>
             <a href="#contact" className="hover:text-slate-950">Contact</a>
           </div>
-          <a href="#contact" className="hidden rounded-full bg-slate-950 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:bg-slate-800 sm:inline-flex">{preview.cta_text || 'Get in touch'}</a>
+          <a href="#contact" className={`hidden rounded-full px-5 py-2.5 text-sm font-bold shadow-lg shadow-slate-950/10 sm:inline-flex ${themeClasses.accent}`}>{preview.cta_text || 'Get in touch'}</a>
           <Menu className="h-5 w-5 text-slate-500 md:hidden" />
         </nav>
       </header>
 
-      <section id="home" className={`relative overflow-hidden bg-gradient-to-br ${gradientByIndustry(preview.industry)}`}>
+      <section id="home" className={`relative overflow-hidden bg-gradient-to-br ${themeClasses.hero || gradientByIndustry(preview.industry)}`}>
         <div className="absolute left-1/2 top-0 h-80 w-80 -translate-x-1/2 rounded-full bg-white/70 blur-3xl" />
-        <div className="relative mx-auto grid max-w-7xl gap-12 px-6 py-20 lg:grid-cols-[1fr_0.95fr] lg:items-center lg:py-28">
+        <div className={`relative mx-auto grid max-w-7xl gap-12 px-6 py-20 lg:items-center lg:py-28 ${getHeroLayout(visualTheme)}`}>
           <div>
             <div className="mb-6 flex flex-wrap gap-3">
               {preview.location && <p className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"><MapPin className="h-4 w-4" /> {preview.location}</p>}
@@ -94,12 +154,12 @@ export function WebsitePreviewPage({ token }: Props) {
             <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-slate-950 sm:text-7xl">{preview.hero_headline}</h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">{preview.subheadline}</p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <a href="#contact" className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-7 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-950/15 transition-colors hover:bg-slate-800">{preview.cta_text || 'Request a consultation'} <ArrowRight className="h-4 w-4" /></a>
+              <a href="#contact" className={`inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold shadow-xl shadow-slate-950/15 transition-colors ${themeClasses.accent}`}>{preview.cta_text || 'Request a consultation'} <ArrowRight className="h-4 w-4" /></a>
               <a href="#services" className="rounded-full border border-slate-300 bg-white/70 px-7 py-3.5 text-sm font-bold text-slate-800 transition-colors hover:bg-white">Explore services</a>
             </div>
           </div>
 
-          <div className="rounded-[2.25rem] border border-white/80 bg-white/70 p-4 shadow-2xl shadow-slate-900/10 backdrop-blur">
+          <div className={`rounded-[2.25rem] border p-4 shadow-2xl shadow-slate-900/10 backdrop-blur ${themeClasses.panel}`}>
             <div className="overflow-hidden rounded-[1.75rem] bg-slate-950 text-white">
               <div className="relative min-h-80 p-7">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_16rem),radial-gradient(circle_at_75%_80%,rgba(96,165,250,0.35),transparent_18rem)]" />
@@ -121,7 +181,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section id="services" className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
+      <section id="services" style={{ order: sectionRank('services') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
         <div className="mb-12 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Services</p>
@@ -131,7 +191,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {services.slice(0, 4).map((service, index) => (
-            <article key={service.title} className="group rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+            <article key={service.title} className={`group ${cardClasses}`}>
               <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white">0{index + 1}</div>
               <h3 className="text-xl font-black tracking-tight">{service.title}</h3>
               <p className="mt-4 text-sm leading-7 text-slate-600">{service.description}</p>
@@ -140,7 +200,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section id="experience" className="border-y border-slate-200 bg-slate-50">
+      <section id="experience" style={{ order: sectionRank('experience') }} className="border-y border-slate-200 bg-slate-50">
         <div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 sm:py-24 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Experience</p>
@@ -154,7 +214,7 @@ export function WebsitePreviewPage({ token }: Props) {
           <div className="grid gap-5 sm:grid-cols-3">
             {galleryCards.slice(0, 3).map((card) => (
               <div key={card.title} className="min-h-72 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="h-28 rounded-[1.4rem] bg-gradient-to-br from-slate-900 via-slate-700 to-slate-400" />
+                <div className={`h-28 rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} />
                 <h3 className="mt-5 text-lg font-black">{card.title}</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
               </div>
@@ -163,7 +223,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section id="trust" className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
+      <section id="trust" style={{ order: sectionRank('trust') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Why customers choose us</p>
@@ -175,7 +235,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section className="bg-slate-950 text-white">
+      <section style={{ order: sectionRank('trust') + 0.5 }} className="bg-slate-950 text-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-6 py-16 md:grid-cols-[0.8fr_1.2fr] md:items-center">
           <div>
             <Quote className="h-10 w-10 text-white/40" />
@@ -187,7 +247,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section id="contact" className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
+      <section id="contact" style={{ order: sectionRank('cta') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
         <div className="overflow-hidden rounded-[2.25rem] bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-2xl shadow-slate-900/15 lg:grid lg:grid-cols-[1fr_0.75fr]">
           <div className="p-8 sm:p-12">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Get started</p>
@@ -204,7 +264,7 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 bg-white px-6 py-8 text-center text-sm text-slate-500">
+      <footer style={{ order: 10 }} className="border-t border-slate-200 bg-white px-6 py-8 text-center text-sm text-slate-500">
         © {new Date().getFullYear()} {preview.business_name}. All rights reserved.
       </footer>
     </main>
