@@ -155,6 +155,7 @@ export interface WebsitePreviewData {
   };
   visual_theme?: {
     design_variant_id?: string;
+    structure_variant?: "classic" | "service_first" | "gallery_first" | "story_driven" | "trust_first" | "cta_focused" | "editorial" | "project_showcase";
     layout_variant?: "medical" | "construction" | "restaurant" | "beauty" | "auto" | "professional";
     color_theme?: string;
     hero_style?: "split" | "bold" | "gallery" | "editorial" | "minimal" | "magazine" | "service";

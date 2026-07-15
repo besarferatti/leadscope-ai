@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Building2, CalendarCheck, Car, ChefHat, CheckCircle2, Clock, Coffee, Gem, Gauge, Hammer, HardHat, HeartPulse, Loader2, MapPin, Menu, Phone, Quote, Scissors, ShieldCheck, Sparkles, Star, Stethoscope, Utensils, Wrench, Briefcase } from 'lucide-react';
+import { ArrowRight, Building2, Car, ChefHat, CheckCircle2, Coffee, Gem, Gauge, Hammer, HardHat, HeartPulse, Loader2, MapPin, Menu, Phone, Quote, Scissors, ShieldCheck, Sparkles, Star, Stethoscope, Utensils, Wrench, Briefcase } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { WebsitePreviewData } from '../types';
 
@@ -20,7 +20,8 @@ const fallbackVisualTheme = (preview: WebsitePreviewData) => ({
   layout_variant: 'professional' as const,
   color_theme: 'slate-blue',
   hero_style: 'split' as const,
-  section_order: ['services', 'experience', 'trust', 'cta'],
+  structure_variant: 'classic' as const,
+  section_order: ['trust', 'services', 'about', 'gallery', 'why_us', 'contact'],
   card_style: 'rounded' as const,
   visual_density: 'balanced' as const,
   accent_style: 'soft' as const,
@@ -98,16 +99,6 @@ function getImageCardStyle(visualTheme: VisualTheme) {
   return 'border-slate-200 bg-white text-slate-950 shadow-slate-900/10';
 }
 
-function getGalleryIcon(visualTheme: VisualTheme): PreviewIcon {
-  const key = visualTheme.layout_variant || visualTheme.color_theme || 'professional';
-  if (/medical/.test(key)) return HeartPulse;
-  if (/construction/.test(key)) return HardHat;
-  if (/restaurant/.test(key)) return Utensils;
-  if (/beauty/.test(key)) return Sparkles;
-  if (/auto/.test(key)) return Gauge;
-  return Star;
-}
-
 function isValidImageUrl(url?: string) {
   if (!url) return false;
   try {
@@ -148,10 +139,26 @@ function getHeroLayout(visualTheme: VisualTheme) {
   return 'lg:grid-cols-[1fr_0.95fr]';
 }
 
-function getSectionOrder(visualTheme: VisualTheme) {
-  const safe = ['services', 'experience', 'trust', 'cta'];
-  const chosen = (visualTheme.section_order || []).filter((item) => safe.includes(item));
-  return [...chosen, ...safe.filter((item) => !chosen.includes(item))];
+function getSectionOrder(preview: WebsitePreviewData) {
+  const visualTheme = (preview.visual_theme || fallbackVisualTheme(preview)) as VisualTheme;
+  const allowed = ['trust', 'services', 'service_detail', 'about', 'story', 'process', 'projects', 'gallery', 'experience', 'testimonial', 'testimonials', 'why_us', 'cta', 'contact', 'quote_cta', 'featured_service'];
+  const byStructure: Record<string, string[]> = {
+    classic: ['trust', 'services', 'about', 'gallery', 'why_us', 'contact'],
+    service_first: ['services', 'service_detail', 'why_us', 'testimonial', 'contact'],
+    gallery_first: ['gallery', 'services', 'experience', 'testimonial', 'contact'],
+    story_driven: ['about', 'story', 'process', 'services', 'trust', 'contact'],
+    trust_first: ['trust', 'testimonial', 'services', 'about', 'contact'],
+    cta_focused: ['cta', 'services', 'why_us', 'gallery', 'contact'],
+    editorial: ['story', 'featured_service', 'gallery', 'services', 'contact'],
+    project_showcase: ['projects', 'process', 'services', 'why_us', 'quote_cta'],
+  };
+  const byLayout: Record<string, string[]> = {
+    medical: byStructure.trust_first, construction: byStructure.project_showcase, restaurant: byStructure.gallery_first, beauty: byStructure.editorial, auto: byStructure.service_first, professional: byStructure.classic,
+  };
+  const chosen = (visualTheme.section_order || []).filter((item) => allowed.includes(item) && item !== 'hero');
+  const fallback = byStructure[visualTheme.structure_variant || ''] || byLayout[visualTheme.layout_variant || ''] || byStructure.classic;
+  const order = chosen.length >= 5 ? chosen : fallback;
+  return [...order, ...fallback.filter((item) => !order.includes(item))].slice(0, 7);
 }
 
 function getVisualBlockStyle(visualTheme: VisualTheme) {
@@ -204,14 +211,36 @@ export function WebsitePreviewPage({ token }: Props) {
   const galleryCards = visualTheme.gallery_cards?.length ? visualTheme.gallery_cards : fallbackVisualTheme(preview).gallery_cards as VisualTheme['gallery_cards'];
   const themeClasses = getThemeClasses(visualTheme);
   const cardClasses = getCardClasses(visualTheme);
-  const sectionOrder = getSectionOrder(visualTheme);
-  const sectionRank = (name: string) => sectionOrder.indexOf(name);
+  const sectionOrder = getSectionOrder(preview);
   const visualBlockStyle = getVisualBlockStyle(visualTheme);
   const visualGradient = getVisualGradient(visualTheme);
   const imageCardStyle = getImageCardStyle(visualTheme);
   const IndustryIcon = getIndustryIcon(preview);
-  const GalleryIcon = getGalleryIcon(visualTheme);
   const imageSections: NonNullable<VisualTheme['image_sections']> = visualTheme.image_sections?.length ? visualTheme.image_sections : galleryCards.map((card, index) => ({ ...card, image_alt: card.image_alt || card.title, visual_type: index === 0 ? 'hero' : 'gallery' }));
+
+  const renderServiceCards = (limit = 4) => services.slice(0, limit).map((service, index) => {
+    const ServiceIcon = getServiceIcon(preview, service.title);
+    return <article key={`${service.title}-${index}`} className={`group ${cardClasses}`}><div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-950/15"><ServiceIcon className="h-6 w-6" /></div><p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Service 0{index + 1}</p><h3 className="text-xl font-black tracking-tight">{service.title}</h3><p className="mt-4 text-sm leading-7 text-slate-600">{service.description}</p></article>;
+  });
+  const visualCards = imageSections.slice(0, 4);
+  const sectionRenderers: Record<string, () => JSX.Element> = {
+    services: () => <section id="services" key="services" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="mb-12 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div className="max-w-2xl"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Services</p><h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Designed around what customers need most</h2></div><p className="max-w-md leading-7 text-slate-600">Clear service options, polished presentation, and a smooth path from interest to action.</p></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">{renderServiceCards(4)}</div></section>,
+    service_detail: () => <section id="service_detail" key="service_detail" className="bg-slate-50 px-6 py-16 sm:py-24"><div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Service detail</p><h2 className="mt-3 text-4xl font-black tracking-tight">A closer look at the right-fit services</h2><p className="mt-5 leading-8 text-slate-600">Helpful details make it easy for visitors to understand options and take the next step.</p></div><div className="grid gap-4 md:grid-cols-2">{renderServiceCards(4)}</div></div></section>,
+    featured_service: () => <section id="featured_service" key="featured_service" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="rounded-[2.25rem] bg-slate-950 p-8 text-white shadow-2xl sm:p-12"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Featured service</p><h2 className="mt-4 text-4xl font-black">{services[0]?.title || 'Signature service'}</h2><p className="mt-5 max-w-3xl leading-8 text-slate-300">{services[0]?.description || preview.about_intro}</p></div></section>,
+    about: () => <section id="about" key="about" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="grid gap-10 lg:grid-cols-2 lg:items-center"><div><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">About</p><h2 className="mt-3 text-4xl font-black tracking-tight">Built around a better customer experience</h2><p className="mt-6 leading-8 text-slate-600">{preview.about_intro}</p></div><div className={`rounded-[2rem] bg-gradient-to-br ${visualBlockStyle} p-8 text-white`}><IndustryIcon className="h-12 w-12" /><p className="mt-20 text-2xl font-black">{visualTheme.hero_visual_title}</p></div></div></section>,
+    story: () => <section id="story" key="story" className="border-y border-slate-200 bg-white px-6 py-16 sm:py-24"><div className="mx-auto max-w-4xl"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Story</p><h2 className="mt-3 text-4xl font-black tracking-tight">A more personal way to introduce {preview.business_name}</h2><p className="mt-6 text-xl leading-9 text-slate-600">{preview.about_intro}</p></div></section>,
+    process: () => <section id="process" key="process" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Process</p><h2 className="mt-3 text-4xl font-black tracking-tight">Simple steps from interest to action</h2><div className="mt-10 grid gap-5 md:grid-cols-3">{['Connect', 'Plan', 'Deliver'].map((step, index) => <div key={step} className={cardClasses}><p className="text-5xl font-black text-slate-200">0{index + 1}</p><h3 className="mt-4 text-xl font-black">{step}</h3><p className="mt-3 text-sm leading-7 text-slate-600">Clear communication and practical guidance at every stage.</p></div>)}</div></section>,
+    projects: () => <section id="projects" key="projects" className="bg-slate-950 px-6 py-16 text-white sm:py-24"><div className="mx-auto max-w-7xl"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Projects</p><h2 className="mt-3 text-4xl font-black tracking-tight">Proof of quality in project-style highlights</h2><div className="mt-10 grid gap-5 md:grid-cols-3">{galleryCards.slice(0, 3).map((card) => <div key={card.title} className="rounded-[2rem] bg-white/10 p-6"><div className={`h-48 rounded-[1.5rem] bg-gradient-to-br ${visualBlockStyle}`} /><h3 className="mt-5 text-xl font-black">{card.title}</h3><p className="mt-3 text-sm leading-7 text-slate-300">{card.description}</p></div>)}</div></div></section>,
+    gallery: () => <section id="gallery" key="gallery" className="border-y border-slate-200 bg-slate-50"><div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 sm:py-24 lg:grid-cols-[0.85fr_1.15fr] lg:items-center"><div><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Gallery</p><h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">A visually rich first impression</h2><p className="mt-6 leading-8 text-slate-600">{visualTheme.hero_visual_description}</p></div><div className="grid gap-5 sm:grid-cols-2">{visualCards.map((card, index) => <div key={`${card.title}-${index}`} className={`min-h-72 rounded-[2rem] border p-5 shadow-xl ${imageCardStyle}`}><div className={`h-36 rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} /><h3 className="mt-5 text-lg font-black">{card.title}</h3><p className="mt-3 text-sm leading-6 opacity-75">{card.description}</p></div>)}</div></div></section>,
+    experience: () => <section id="experience" key="experience" className="border-y border-slate-200 bg-slate-50"><div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 sm:py-24 lg:grid-cols-[0.85fr_1.15fr] lg:items-center"><div><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Experience</p><h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">A polished first impression for every visitor</h2><p className="mt-6 leading-8 text-slate-600">{preview.about_intro}</p></div><div className="grid gap-5 sm:grid-cols-2">{visualCards.map((card, index) => <div key={`${card.title}-experience-${index}`} className={`min-h-72 rounded-[2rem] border p-5 shadow-xl ${imageCardStyle}`}><div className={`h-36 rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} /><h3 className="mt-5 text-lg font-black">{card.title}</h3><p className="mt-3 text-sm leading-6 opacity-75">{card.description}</p></div>)}</div></div></section>,
+    trust: () => <section id="trust" key="trust" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start"><div><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Why customers choose us</p><h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Trust built into every detail</h2></div><div className="grid gap-4 sm:grid-cols-2">{trustItems.slice(0, 4).map((item) => <div key={item} className="rounded-3xl border border-slate-200 bg-white p-5 font-bold text-slate-700 shadow-sm"><CheckCircle2 className="mb-4 h-6 w-6 text-slate-950" />{item}</div>)}</div></div></section>,
+    why_us: () => <section id="why_us" key="why_us" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="grid gap-4 md:grid-cols-4">{trustItems.slice(0, 4).map((item) => <div key={item} className="rounded-3xl border border-slate-200 bg-white p-5 font-bold text-slate-700 shadow-sm"><CheckCircle2 className="mb-4 h-6 w-6 text-slate-950" />{item}</div>)}</div></section>,
+    testimonial: () => <section id="testimonial" key="testimonial" className="bg-slate-950 text-white"><div className="mx-auto grid max-w-7xl gap-8 px-6 py-16 md:grid-cols-[0.8fr_1.2fr] md:items-center"><div><Quote className="h-10 w-10 text-white/40" /><h2 className="mt-5 text-3xl font-black tracking-tight">A confident, customer-ready experience</h2></div><div className="grid gap-4 sm:grid-cols-3">{['Professional', 'Responsive', 'Trusted'].map((item) => <div key={item} className="rounded-3xl bg-white/10 p-6"><Star className="h-5 w-5 fill-white" /><p className="mt-5 text-sm leading-7 text-slate-300">{item} service with clear communication and thoughtful care from start to finish.</p></div>)}</div></div></section>,
+    testimonials: () => <section id="testimonials" key="testimonials" className="bg-slate-950 text-white"><div className="mx-auto grid max-w-7xl gap-4 px-6 py-16 sm:grid-cols-3">{['Professional', 'Responsive', 'Trusted'].map((item) => <div key={item} className="rounded-3xl bg-white/10 p-6"><Star className="h-5 w-5 fill-white" /><p className="mt-5 text-sm leading-7 text-slate-300">{item} service with clear communication and thoughtful care from start to finish.</p></div>)}</div></section>,
+    cta: () => <section id="cta" key="cta" className="mx-auto max-w-7xl px-6 py-16"><div className="rounded-[2rem] bg-slate-950 p-8 text-white sm:p-12"><h2 className="text-4xl font-black">Ready for the next step?</h2><a href="#contact" className="mt-6 inline-flex rounded-full bg-white px-7 py-3.5 text-sm font-black text-slate-950">{preview.cta_text || 'Get in touch'}</a></div></section>,
+    quote_cta: () => <section id="quote_cta" key="quote_cta" className="mx-auto max-w-7xl px-6 py-16"><div className="rounded-[2rem] bg-amber-500 p-8 text-slate-950 sm:p-12"><h2 className="text-4xl font-black">Request a quote or conversation</h2><p className="mt-4 max-w-2xl font-semibold">Get clear answers and a practical path forward with {preview.business_name}.</p></div></section>,
+    contact: () => <section id="contact" key="contact" className="mx-auto max-w-7xl px-6 py-16 sm:py-24"><div className="overflow-hidden rounded-[2.25rem] bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-2xl shadow-slate-900/15 lg:grid lg:grid-cols-[1fr_0.75fr]"><div className="p-8 sm:p-12"><p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Get started</p><h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">{preview.contact?.headline || `Contact ${preview.business_name}`}</h2><p className="mt-5 max-w-2xl leading-8 text-slate-300">{preview.contact?.body || 'Reach out today to ask a question or schedule a conversation.'}</p><a href={preview.website || '#home'} className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-black text-slate-950 hover:bg-slate-100">{preview.cta_text || 'Get in touch'} <ArrowRight className="h-4 w-4" /></a></div><div className="border-t border-white/10 bg-white/10 p-8 sm:p-12 lg:border-l lg:border-t-0"><ShieldCheck className="h-9 w-9 text-white" /><h3 className="mt-5 text-2xl font-black">{preview.business_name}</h3>{preview.contact?.location && <p className="mt-5 text-slate-300"><span className="text-slate-500">Location:</span> {preview.contact.location}</p>}{preview.contact?.website && <p className="mt-3 break-words text-slate-300"><span className="text-slate-500">Website:</span> {preview.contact.website.replace(/^https?:\/\//, '')}</p>}</div></div></section>,
+  };
 
   return (
     <main className={`flex min-h-screen flex-col ${themeClasses.page}`}>
@@ -282,101 +311,9 @@ export function WebsitePreviewPage({ token }: Props) {
         </div>
       </section>
 
-      <section id="services" style={{ order: sectionRank('services') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
-        <div className="mb-12 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-          <div className="max-w-2xl">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Services</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Designed around what customers need most</h2>
-          </div>
-          <p className="max-w-md leading-7 text-slate-600">Clear service options, polished presentation, and a smooth path from interest to action.</p>
-        </div>
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {services.slice(0, 4).map((service, index) => {
-            const ServiceIcon = getServiceIcon(preview, service.title);
-            return (
-              <article key={service.title} className={`group ${cardClasses}`}>
-                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-950/15"><ServiceIcon className="h-6 w-6" /></div>
-                <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Service 0{index + 1}</p>
-                <h3 className="text-xl font-black tracking-tight">{service.title}</h3>
-                <p className="mt-4 text-sm leading-7 text-slate-600">{service.description}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+      {sectionOrder.map((section) => sectionRenderers[section]?.())}
 
-      <section id="experience" style={{ order: sectionRank('experience') }} className="border-y border-slate-200 bg-slate-50">
-        <div className="mx-auto grid max-w-7xl gap-12 px-6 py-16 sm:py-24 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Experience</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">A polished first impression for every visitor</h2>
-            <p className="mt-6 leading-8 text-slate-600">{preview.about_intro}</p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-3xl bg-white p-5 shadow-sm"><CalendarCheck className="h-6 w-6 text-slate-950" /><p className="mt-3 text-sm font-bold">Simple next steps</p></div>
-              <div className="rounded-3xl bg-white p-5 shadow-sm"><Clock className="h-6 w-6 text-slate-950" /><p className="mt-3 text-sm font-bold">Responsive service</p></div>
-            </div>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {imageSections.slice(0, 4).map((card, index) => {
-              const cardImageUrl = 'image_url' in card && isValidImageUrl(card.image_url) ? card.image_url : undefined;
-              return (
-                <div key={`${card.title}-${index}`} aria-label={card.image_alt || card.title} className={`min-h-80 rounded-[2rem] border p-5 shadow-xl ${imageCardStyle}`}>
-                  <div className={`relative h-36 overflow-hidden rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} style={cardImageUrl ? { backgroundImage: `url(${cardImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.45),transparent_7rem)]" />
-                    <div className="absolute bottom-4 left-4 rounded-2xl bg-white/85 p-3 text-slate-950 shadow-lg backdrop-blur"><GalleryIcon className="h-6 w-6" /></div>
-                    <div className="absolute right-4 top-4 rounded-full bg-black/20 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-white backdrop-blur">{card.visual_type || 'gallery'}</div>
-                  </div>
-                  <h3 className="mt-5 text-lg font-black">{card.title}</h3>
-                  <p className="mt-3 text-sm leading-6 opacity-75">{card.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section id="trust" style={{ order: sectionRank('trust') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Why customers choose us</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Trust built into every detail</h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {trustItems.slice(0, 4).map((item) => <div key={item} className="rounded-3xl border border-slate-200 bg-white p-5 font-bold text-slate-700 shadow-sm"><CheckCircle2 className="mb-4 h-6 w-6 text-slate-950" />{item}</div>)}
-          </div>
-        </div>
-      </section>
-
-      <section style={{ order: sectionRank('trust') + 0.5 }} className="bg-slate-950 text-white">
-        <div className="mx-auto grid max-w-7xl gap-8 px-6 py-16 md:grid-cols-[0.8fr_1.2fr] md:items-center">
-          <div>
-            <Quote className="h-10 w-10 text-white/40" />
-            <h2 className="mt-5 text-3xl font-black tracking-tight">A confident, customer-ready experience</h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {["Professional", "Responsive", "Trusted"].map((item) => <div key={item} className="rounded-3xl bg-white/10 p-6"><Star className="h-5 w-5 fill-white" /><p className="mt-5 text-sm leading-7 text-slate-300">{item} service with clear communication and thoughtful care from start to finish.</p></div>)}
-          </div>
-        </div>
-      </section>
-
-      <section id="contact" style={{ order: sectionRank('cta') }} className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
-        <div className="overflow-hidden rounded-[2.25rem] bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-2xl shadow-slate-900/15 lg:grid lg:grid-cols-[1fr_0.75fr]">
-          <div className="p-8 sm:p-12">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">Get started</p>
-            <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">{preview.contact?.headline || `Contact ${preview.business_name}`}</h2>
-            <p className="mt-5 max-w-2xl leading-8 text-slate-300">{preview.contact?.body || 'Reach out today to ask a question or schedule a conversation.'}</p>
-            <a href={preview.website || '#home'} className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-black text-slate-950 hover:bg-slate-100">{preview.cta_text || 'Get in touch'} <ArrowRight className="h-4 w-4" /></a>
-          </div>
-          <div className="border-t border-white/10 bg-white/10 p-8 sm:p-12 lg:border-l lg:border-t-0">
-            <ShieldCheck className="h-9 w-9 text-white" />
-            <h3 className="mt-5 text-2xl font-black">{preview.business_name}</h3>
-            {preview.contact?.location && <p className="mt-5 text-slate-300"><span className="text-slate-500">Location:</span> {preview.contact.location}</p>}
-            {preview.contact?.website && <p className="mt-3 break-words text-slate-300"><span className="text-slate-500">Website:</span> {preview.contact.website.replace(/^https?:\/\//, '')}</p>}
-          </div>
-        </div>
-      </section>
-
-      <footer style={{ order: 10 }} className="border-t border-slate-200 bg-white px-6 py-8 text-center text-sm text-slate-500">
+      <footer className="border-t border-slate-200 bg-white px-6 py-8 text-center text-sm text-slate-500">
         © {new Date().getFullYear()} {preview.business_name}. All rights reserved.
       </footer>
     </main>
