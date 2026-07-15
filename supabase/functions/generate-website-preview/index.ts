@@ -24,6 +24,7 @@ type Audit = {
   } | null;
 };
 
+type CanonicalIndustry = "dental" | "plumbing" | "electrician" | "roofing" | "hvac" | "construction" | "restaurant" | "cafe" | "beauty" | "auto" | "cleaning" | "landscaping" | "pest_control" | "moving" | "law" | "real_estate" | "fitness" | "hotel" | "accounting" | "veterinary" | "it_services" | "marketing" | "professional";
 type LayoutVariant = "medical" | "construction" | "restaurant" | "beauty" | "auto" | "professional";
 type HeroStyle = "split" | "bold" | "gallery" | "editorial" | "minimal" | "magazine" | "service";
 type CardStyle = "rounded" | "sharp" | "glass" | "editorial" | "bordered" | "shadow";
@@ -329,8 +330,100 @@ function matchesIndustry(industry: string, words: string[]) {
   return words.some((word) => normalized.includes(word));
 }
 
-function getIndustryWebsiteContent(industry: string, location: string) {
+function detectCanonicalIndustry(lead: Lead): CanonicalIndustry {
+  const text = [lead.industry, lead.business_name, lead.website, lead.location].filter(Boolean).join(" ").toLowerCase();
+  const has = (words: string[]) => words.some((word) => text.includes(word));
+
+  if (has(["electrician", "electrical", "wiring", "panel", "lighting"])) return "electrician";
+  if (has(["plumbing", "plumber", "pipe", "drain", "leak", "water heater"])) return "plumbing";
+  if (has(["roofing", "roofer", "roof", "gutter"])) return "roofing";
+  if (has(["hvac", "heating", "cooling", "air conditioning", "furnace", "ac repair"])) return "hvac";
+  if (has(["construction", "contractor", "builder", "renovation", "remodel", "concrete", "masonry"])) return "construction";
+  if (has(["dental", "dentist", "orthodont", "clinic"])) return "dental";
+  if (has(["cafe", "coffee"])) return "cafe";
+  if (has(["restaurant", "food", "bar", "bistro"])) return "restaurant";
+  if (has(["salon", "beauty", "spa", "hair", "barber", "nail", "esthetic"])) return "beauty";
+  if (has(["auto", "mechanic", "vehicle", "car", "garage", "tire"])) return "auto";
+  if (has(["cleaning", "cleaner", "maid", "janitorial"])) return "cleaning";
+  if (has(["landscaping", "landscaper", "lawn", "garden"] )) return "landscaping";
+  if (has(["pest", "exterminator"] )) return "pest_control";
+  if (has(["moving", "mover", "relocation"] )) return "moving";
+  if (has(["law", "lawyer", "attorney", "legal"] )) return "law";
+  if (has(["real estate", "realtor", "property"] )) return "real_estate";
+  if (has(["fitness", "gym", "trainer"] )) return "fitness";
+  if (has(["hotel", "motel", "hospitality"] )) return "hotel";
+  if (has(["accounting", "accountant", "bookkeeping", "tax"] )) return "accounting";
+  if (has(["veterinary", "veterinarian", "animal hospital", "pet clinic"] )) return "veterinary";
+  if (has(["it services", "managed it", "computer repair", "technology"] )) return "it_services";
+  if (has(["marketing", "advertising", "creative agency"] )) return "marketing";
+  return "professional";
+}
+
+type IndustryWebsiteContent = ReturnType<typeof getIndustryWebsiteContent>;
+
+function getIndustryWebsiteContent(industry: CanonicalIndustry | string, location: string) {
   const place = location ? ` in ${location}` : "";
+  const canonical = industry as CanonicalIndustry;
+  if (canonical === "electrician") {
+    return { displayLabel: "Electrical Services", services: [
+      { title: "Electrical Repairs", description: "Responsive troubleshooting and repairs for outlets, breakers, fixtures, and electrical issues." },
+      { title: "Panel Upgrades", description: "Safe panel improvements that support modern power needs for homes and businesses." },
+      { title: "Lighting Installation", description: "Clean lighting installs and upgrades that improve comfort, visibility, and efficiency." },
+      { title: "Safety Inspections", description: "Thorough checks that identify hazards and help keep electrical systems reliable." },
+    ], cta: "Schedule Electrical Service", style: "Electrical panels, wiring, technician tools, safe modern service", pexelsQueries: ["electrician wiring", "electrical panel", "electrician repair", "lighting installation"], gallery: [
+      { title: "Panel & Wiring Expertise", description: "Professional visuals focused on safe electrical systems and clean workmanship." },
+      { title: "Lighting Upgrades", description: "Modern lighting cards for installations, repairs, and efficiency-focused improvements." },
+      { title: "Safety-First Service", description: "Trust-building sections for inspections, diagnostics, and dependable repairs." },
+    ], hero: `Trusted Electrical Services${place}`, subheadline: "Safe, reliable electrical work for homes and businesses" };
+  }
+  if (canonical === "plumbing") {
+    return { displayLabel: "Plumbing Services", services: [
+      { title: "Leak Repair", description: "Prompt leak detection and repair to protect fixtures, walls, and plumbing systems." },
+      { title: "Drain Cleaning", description: "Reliable drain clearing for sinks, tubs, kitchens, and main household lines." },
+      { title: "Pipe Installation", description: "Clean pipe repairs and installations completed with practical, long-lasting workmanship." },
+      { title: "Water Heater Service", description: "Water heater repair and service that helps restore comfort quickly." },
+    ], cta: "Book a Plumbing Visit", style: "Plumbing repair scenes, clean fixtures, pipe work, practical technician service", pexelsQueries: ["plumber fixing sink", "plumbing repair", "pipe repair", "bathroom plumbing", "water heater repair"], gallery: [
+      { title: "Leak & Fixture Repair", description: "Customer-friendly cards for everyday plumbing repairs and fixture service." },
+      { title: "Drain & Pipe Solutions", description: "Clear visuals for drain cleaning, pipe work, and dependable repair visits." },
+      { title: "Water Heater Support", description: "Service blocks focused on hot water comfort and timely plumbing help." },
+    ], hero: `Reliable Plumbing Services${place}`, subheadline: "Fast, dependable plumbing help for leaks, drains, pipes, and water heaters" };
+  }
+  if (canonical === "construction") {
+    return { displayLabel: "Construction Services", services: [
+      { title: "Residential Construction", description: "Well-managed builds with clear communication from planning through completion." },
+      { title: "Renovations & Remodeling", description: "Thoughtful updates that improve comfort, function, and long-term property value." },
+      { title: "Repairs & Maintenance", description: "Reliable fixes and upkeep handled with practical expertise and care." },
+      { title: "Project Planning", description: "Straightforward scopes, timelines, and recommendations before work begins." },
+    ], cta: "Request a Free Quote", style: "Modern construction projects, contractor tools, renovation planning, finished home details", pexelsQueries: ["home renovation", "construction project", "contractor tools", "modern house construction"], gallery: [
+      { title: "Residential Construction", description: "Portfolio-style cards for quality builds and finished project details." },
+      { title: "Renovations & Remodeling", description: "Before-and-after sections that make transformations easy to understand." },
+      { title: "Project Planning", description: "Clean visuals for timelines, materials, and organized jobsite communication." },
+    ], hero: `Quality Construction Services${place}`, subheadline: "Carefully planned building, remodeling, and repair projects" };
+  }
+  if (canonical === "roofing") {
+    return { displayLabel: "Roofing Services", services: [
+      { title: "Roof Repairs", description: "Dependable repairs for damaged shingles, storm wear, and roof problem areas." },
+      { title: "New Roof Installation", description: "Professional roof installation with clear guidance on materials and timelines." },
+      { title: "Leak Detection", description: "Careful roof assessments that identify leaks and prevent further property damage." },
+      { title: "Gutter Services", description: "Gutter support that helps move water away from your home efficiently." },
+    ], cta: "Request a Roof Inspection", style: "Roof repair, shingles, gutter details, exterior home protection", pexelsQueries: ["roof repair", "roofer working", "house roof installation", "roofing contractor"], gallery: [
+      { title: "Roof Repairs", description: "Exterior project visuals for repairs, shingles, and weather protection." },
+      { title: "Roof Installation", description: "Professional cards for new roofs, materials, and jobsite craftsmanship." },
+      { title: "Leak & Gutter Care", description: "Trust sections for inspections, water control, and preventative maintenance." },
+    ], hero: `Trusted Roofing Services${place}`, subheadline: "Roof repairs, installations, inspections, and gutter support" };
+  }
+  if (canonical === "hvac") {
+    return { displayLabel: "HVAC Services", services: [
+      { title: "AC Repair", description: "Responsive cooling repairs that restore comfort when systems stop performing." },
+      { title: "Heating Service", description: "Heating diagnostics and service for dependable warmth in colder seasons." },
+      { title: "System Installation", description: "Professional HVAC installation guidance for efficient heating and cooling systems." },
+      { title: "Maintenance Plans", description: "Preventative service that helps equipment run reliably year-round." },
+    ], cta: "Schedule HVAC Service", style: "HVAC technician, air conditioner repair, heating equipment, ventilation systems", pexelsQueries: ["hvac technician", "air conditioner repair", "heating system service", "ventilation system"], gallery: [
+      { title: "Cooling Repair", description: "Service cards for AC diagnostics, repairs, and comfort-focused support." },
+      { title: "Heating Service", description: "Warm, reliable visuals for furnace and heating system care." },
+      { title: "System Maintenance", description: "Clean technical sections for inspections, tune-ups, and efficient performance." },
+    ], hero: `Reliable HVAC Services${place}`, subheadline: "Heating, cooling, installation, and maintenance for year-round comfort" };
+  }
   if (matchesIndustry(industry, ["dental", "dentist", "orthodont", "clinic"])) {
     return {
       services: [
@@ -424,6 +517,59 @@ function getLayoutVariant(industry: string): LayoutVariant {
   return "professional";
 }
 
+function getDisplayLabel(canonicalIndustry: CanonicalIndustry, fallback: string) {
+  const content = getIndustryWebsiteContent(canonicalIndustry, "");
+  return "displayLabel" in content ? content.displayLabel : fallback || "Professional Services";
+}
+
+function getCanonicalPexelsQueries(canonicalIndustry: CanonicalIndustry) {
+  const content = getIndustryWebsiteContent(canonicalIndustry, "");
+  return "pexelsQueries" in content ? content.pexelsQueries : undefined;
+}
+
+function containsForbiddenIndustryText(value: unknown, canonicalIndustry: CanonicalIndustry) {
+  const text = JSON.stringify(value || "").toLowerCase();
+  const forbidden: Partial<Record<CanonicalIndustry, string[]>> = {
+    electrician: ["plumbing", "plumber", "pipe", "drain", "construction", "contractor", "residential construction", "roofing", "roofer", "hvac"],
+    plumbing: ["electrician", "electrical", "wiring", "construction", "contractor", "residential construction", "roofing", "roofer", "hvac"],
+    construction: ["plumbing", "plumber", "pipe", "drain", "electrician", "electrical", "wiring", "hvac", "air conditioning", "furnace"],
+  };
+  return (forbidden[canonicalIndustry] || []).some((word) => text.includes(word));
+}
+
+function enforceIndustryConsistency(previewData: WebsitePreviewData, canonicalIndustry: CanonicalIndustry, industryContent: IndustryWebsiteContent): WebsitePreviewData {
+  const displayLabel = "displayLabel" in industryContent ? industryContent.displayLabel : previewData.industry;
+  const hero = "hero" in industryContent ? industryContent.hero : previewData.hero_headline;
+  const subheadline = "subheadline" in industryContent ? industryContent.subheadline : previewData.subheadline;
+  const galleryCards = industryContent.gallery.map((card) => ({ ...card, image_alt: `${card.title} for ${previewData.business_name}` }));
+  const imageKeywords = [displayLabel, previewData.location, ...industryContent.services.map((service) => service.title)].filter(Boolean).slice(0, 8);
+
+  return {
+    ...previewData,
+    industry: displayLabel,
+    hero_headline: containsForbiddenIndustryText(previewData.hero_headline, canonicalIndustry) ? hero : previewData.hero_headline || hero,
+    subheadline: containsForbiddenIndustryText(previewData.subheadline, canonicalIndustry) ? subheadline : previewData.subheadline || subheadline,
+    cta_text: industryContent.cta,
+    services: containsForbiddenIndustryText(previewData.services, canonicalIndustry) ? industryContent.services : industryContent.services,
+    contact: {
+      ...previewData.contact,
+      body: containsForbiddenIndustryText(previewData.contact?.body, canonicalIndustry) ? `Reach out today to ${industryContent.cta.toLowerCase()}.` : previewData.contact.body,
+    },
+    visual_theme: {
+      ...previewData.visual_theme,
+      industry_style: industryContent.style,
+      hero_visual_title: `${displayLabel} experience`,
+      hero_visual_description: industryContent.style,
+      image_keywords: imageKeywords,
+      gallery_cards: galleryCards,
+      image_sections: [
+        { title: "Hero visual", description: industryContent.style, image_alt: `${previewData.business_name} ${displayLabel} hero visual`, visual_type: "hero" },
+        ...industryContent.gallery.slice(0, 3).map((card) => ({ title: card.title, description: card.description, image_alt: `${card.title} visual`, visual_type: "gallery" as const })),
+      ],
+    },
+  };
+}
+
 function extractPreviousDesigns(rows: Array<{ preview_data: unknown }> | null): PreviousDesign[] {
   return (rows || []).map((row) => {
     const data = row.preview_data as { visual_theme?: Record<string, unknown> } | null;
@@ -450,8 +596,13 @@ type PexelsPhoto = {
   src?: { large2x?: string; large?: string; medium?: string };
 };
 
-function getPexelsQueryVariants(industry: string, visualTheme: VisualTheme) {
-  const value = `${industry} ${visualTheme.layout_variant || ""}`.toLowerCase();
+function getPexelsQueryVariants(canonicalIndustry: CanonicalIndustry, visualTheme: VisualTheme) {
+  const canonicalQueries = getCanonicalPexelsQueries(canonicalIndustry);
+  if (canonicalQueries) {
+    const styleQueries = visualTheme.image_style ? canonicalQueries.map((query) => `${query} ${visualTheme.image_style}`) : [];
+    return [...canonicalQueries, ...styleQueries];
+  }
+  const value = `${canonicalIndustry} ${visualTheme.layout_variant || ""}`.toLowerCase();
   const variants = matchesIndustry(value, ["dental", "dentist", "orthodont", "clinic", "medical", "health"])
     ? ["modern dental clinic", "dentist patient care", "bright clinic interior"]
     : matchesIndustry(value, ["construction", "contractor", "remodel", "renovation", "builder", "roofing", "plumb", "electric"])
@@ -484,8 +635,8 @@ async function fetchPexelsImages(query: string, perPage: number): Promise<Pexels
   }
 }
 
-async function buildPreviewImages(previewData: WebsitePreviewData): Promise<PreviewImages | undefined> {
-  const queries = getPexelsQueryVariants(previewData.industry || "", previewData.visual_theme);
+async function buildPreviewImages(previewData: WebsitePreviewData, canonicalIndustry: CanonicalIndustry): Promise<PreviewImages | undefined> {
+  const queries = getPexelsQueryVariants(canonicalIndustry, previewData.visual_theme);
   const shuffledQueries = [...queries].sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2147483648);
   const photos: PexelsPhoto[] = [];
   for (const query of shuffledQueries.slice(0, 3)) {
@@ -507,15 +658,16 @@ async function buildPreviewImages(previewData: WebsitePreviewData): Promise<Prev
   return { hero, gallery };
 }
 
-function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: DesignVariant): WebsitePreviewData {
-  const industryContent = getIndustryWebsiteContent(lead.industry || "", lead.location);
-  const design = selectedDesign || selectDesignVariant(getLayoutVariant(lead.industry || ""), [], lead.industry || "");
+function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: DesignVariant, canonicalIndustry = detectCanonicalIndustry(lead)): WebsitePreviewData {
+  const industryContent = getIndustryWebsiteContent(canonicalIndustry, lead.location);
+  const displayLabel = "displayLabel" in industryContent ? industryContent.displayLabel : lead.industry || "Professional Services";
+  const design = selectedDesign || selectDesignVariant(getLayoutVariant(canonicalIndustry), [], canonicalIndustry);
   const homepage = audit?.seo_content_pack?.homepage_copy;
   const homepageHeadline = homepage?.headline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.headline) ? homepage.headline : industryContent.hero;
-  const homepageSubheadline = homepage?.subheadline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.subheadline) ? homepage.subheadline : `Welcome to ${lead.business_name}, a modern ${lead.industry || "local business"} experience built around trust, clarity, and customer care${lead.location ? ` in ${lead.location}` : ""}.`;
+  const homepageSubheadline = homepage?.subheadline && !/seo|audit|leadscope|agency|package|optimization/i.test(homepage.subheadline) ? homepage.subheadline : `Welcome to ${lead.business_name}, a modern ${displayLabel} experience built around trust, clarity, and customer care${lead.location ? ` in ${lead.location}` : ""}.`;
   return {
     business_name: lead.business_name,
-    industry: lead.industry,
+    industry: displayLabel,
     location: lead.location,
     website: lead.website,
     meta_title: `${lead.business_name}${lead.location ? ` | ${lead.location}` : ""}`,
@@ -524,17 +676,17 @@ function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: Desig
     cta_text: homepage?.cta && !/seo|audit|package|optimization/i.test(homepage.cta) ? homepage.cta : industryContent.cta,
     services: industryContent.services,
     why_choose_us: ["Friendly, customer-first communication", "Modern service experience", "Trusted local team", "Clear next steps from first contact"],
-    about_intro: `${lead.business_name} helps customers feel confident from the first visit with attentive service, thoughtful recommendations, and a polished experience tailored to ${lead.industry || "local"} needs${lead.location ? ` in ${lead.location}` : ""}.`,
+    about_intro: `${lead.business_name} helps customers feel confident from the first visit with attentive service, thoughtful recommendations, and a polished experience tailored to ${displayLabel.toLowerCase()} needs${lead.location ? ` in ${lead.location}` : ""}.`,
     contact: { headline: `Ready to get started with ${lead.business_name}?`, body: `Reach out today to ask a question or ${industryContent.cta.toLowerCase()}.`, website: lead.website, location: lead.location },
     visual_theme: {
       ...design,
       industry_style: industryContent.style,
-      hero_visual_title: `${lead.industry || "Business"} experience`,
+      hero_visual_title: `${displayLabel} experience`,
       hero_visual_description: industryContent.style,
-      image_keywords: [lead.industry, lead.location, ...industryContent.services.map((service) => service.title)].filter(Boolean).slice(0, 8),
+      image_keywords: [displayLabel, lead.location, ...industryContent.services.map((service) => service.title)].filter(Boolean).slice(0, 8),
       gallery_cards: industryContent.gallery.map((card) => ({ ...card, image_alt: `${card.title} for ${lead.business_name}` })),
       image_sections: [
-        { title: "Hero visual", description: industryContent.style, image_alt: `${lead.business_name} ${lead.industry} hero visual`, visual_type: "hero" },
+        { title: "Hero visual", description: industryContent.style, image_alt: `${lead.business_name} ${displayLabel} hero visual`, visual_type: "hero" },
         ...industryContent.gallery.slice(0, 3).map((card) => ({ title: card.title, description: card.description, image_alt: `${card.title} visual`, visual_type: "gallery" as const })),
       ],
     },
@@ -567,17 +719,19 @@ Deno.serve(async (req: Request) => {
 
     const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
     const previousDesigns = extractPreviousDesigns(previousPreviewRows as Array<{ preview_data: unknown }> | null);
-    const selectedStructureVariant = selectStructureVariant(typedLead.industry || "", previousDesigns);
+    const canonicalIndustry = detectCanonicalIndustry(typedLead);
+    const industryContent = getIndustryWebsiteContent(canonicalIndustry, typedLead.location);
+    const selectedStructureVariant = selectStructureVariant(canonicalIndustry, previousDesigns);
     const selectedSectionOrder = normalizeSectionOrder(STRUCTURE_ORDERS[selectedStructureVariant], selectedStructureVariant);
     const selectedDesign = {
-      ...selectDesignVariant(getLayoutVariant(typedLead.industry || ""), previousDesigns, typedLead.industry || ""),
+      ...selectDesignVariant(getLayoutVariant(canonicalIndustry), previousDesigns, canonicalIndustry),
       structure_variant: selectedStructureVariant,
       section_order: selectedSectionOrder,
     };
 
     const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
-    let previewData = fallbackPreview(typedLead, typedAudit, selectedDesign);
+    let previewData = fallbackPreview(typedLead, typedAudit, selectedDesign, canonicalIndustry);
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
     if (openaiApiKey) {
@@ -585,7 +739,8 @@ Deno.serve(async (req: Request) => {
 
 Business public inputs:
 - business_name: ${typedLead.business_name}
-- industry: ${typedLead.industry}
+- canonical_industry: ${canonicalIndustry}
+- industry_display_label: ${getDisplayLabel(canonicalIndustry, typedLead.industry)}
 - location: ${typedLead.location}
 - website: ${typedLead.website || "none"}
 
@@ -600,7 +755,7 @@ Hidden improvement context. Use this only to improve the customer-facing website
 - internal agency recommended service to ignore as public service: ${typedAudit?.seo_content_pack?.recommended_service?.service_name || typedAudit?.recommended_offer || "none"}
 
 Hard rules:
-- Create services that the business sells to its own customers, specific to its industry.
+- Create services that the business sells to its own customers, specific to the canonical industry only.
 - Do NOT create SEO services, SEO packages, technical SEO audit sections, content optimization services, a local SEO angle, audit language, LeadScope language, a meta title suggestion section, an AI website preview label, or internal agency pitch content.
 - If the hidden context says weak CTA, write a stronger public CTA.
 - If it mentions missing service pages, create better customer-facing service sections.
@@ -669,11 +824,21 @@ Return raw JSON only with this exact safe public shape and no extra keys: ${JSON
       }
     }
 
-    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
+    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign, canonicalIndustry));
+    previewData = enforceIndustryConsistency(previewData, canonicalIndustry, industryContent);
     previewData.visual_theme.structure_variant = selectedStructureVariant;
     previewData.visual_theme.section_order = normalizeSectionOrder(selectedSectionOrder, selectedStructureVariant);
-    previewData.images = await buildPreviewImages(previewData);
-    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
+    previewData.images = await buildPreviewImages(previewData, canonicalIndustry);
+    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign, canonicalIndustry));
+    previewData = enforceIndustryConsistency(previewData, canonicalIndustry, industryContent);
+
+    console.log("Saving website preview industry", {
+      canonicalIndustry,
+      previewIndustry: previewData.industry,
+      heroHeadline: previewData.hero_headline,
+      imageKeywords: previewData.visual_theme?.image_keywords,
+      pexelsHero: previewData.images?.hero?.alt,
+    });
 
     const preview_token = createPreviewToken();
     const { data: saved, error: insertError } = await serviceClient.from("website_previews").insert({ lead_id, user_id: user.id, preview_token, preview_data: previewData }).select("preview_token, preview_data, created_at").single();
