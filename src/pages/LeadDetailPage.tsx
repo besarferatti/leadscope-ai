@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Lead, LeadAudit, OutreachMessage, LeadStatus } from '../types';
+import { Lead, LeadAudit, OutreachMessage, LeadStatus, WebsitePreview } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
@@ -32,6 +32,8 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [auditLoading, setAuditLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [websitePreviewToken, setWebsitePreviewToken] = useState<string | null>(null);
+  const [websitePreviewCreatedAt, setWebsitePreviewCreatedAt] = useState<string | null>(null);
   const [msgLoading, setMsgLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
@@ -49,15 +51,25 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
   async function loadAll() {
     setLoading(true);
-    const [leadRes, auditRes, msgsRes] = await Promise.all([
+    const [leadRes, auditRes, msgsRes, previewRes] = await Promise.all([
       supabase.from('leads').select('*').eq('id', leadId).maybeSingle(),
       supabase.from('lead_audits').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('outreach_messages').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }),
+      supabase
+        .from('website_previews')
+        .select('preview_token, created_at')
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
     if (leadRes.error) setError(leadRes.error.message);
     else setLead(leadRes.data);
     setAudit(auditRes.data ?? null);
     setMessages(msgsRes.data ?? []);
+    const latestPreview = previewRes.data as WebsitePreview | null;
+    setWebsitePreviewToken(latestPreview?.preview_token ?? null);
+    setWebsitePreviewCreatedAt(latestPreview?.created_at ?? null);
     setLoading(false);
   }
 
@@ -132,6 +144,24 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   }
 
 
+  function getWebsitePreviewLink(token = websitePreviewToken) {
+    return token ? `${window.location.origin}/preview/${token}` : '';
+  }
+
+  async function handleCopyWebsitePreviewLink() {
+    if (!websitePreviewToken) {
+      await handleGenerateWebsitePreview();
+      return;
+    }
+
+    await copyText(getWebsitePreviewLink(), 'website-preview-link');
+  }
+
+  function handleOpenWebsitePreview() {
+    const previewLink = getWebsitePreviewLink();
+    if (previewLink) window.open(previewLink, '_blank', 'noopener,noreferrer');
+  }
+
   async function handleGenerateWebsitePreview() {
     if (!lead) return;
     setPreviewLoading(true);
@@ -145,11 +175,13 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       if (functionError) throw new Error(functionError.message);
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
-      const token = (data as { preview?: { preview_token?: string } } | null)?.preview?.preview_token;
+      const preview = (data as { preview?: { preview_token?: string; created_at?: string } } | null)?.preview;
+      const token = preview?.preview_token;
       if (!token) throw new Error('Website preview was created but no preview token was returned.');
 
-      const previewLink = `${window.location.origin}/preview/${token}`;
-      await copyText(previewLink, 'website-preview-link');
+      setWebsitePreviewToken(token);
+      setWebsitePreviewCreatedAt(preview?.created_at ?? new Date().toISOString());
+      await copyText(getWebsitePreviewLink(token), 'website-preview-link');
       trackEvent('website_preview_generated', { lead_id: leadId });
     } catch (e: unknown) {
       setError((e as Error).message ?? 'Failed to generate website preview.');
@@ -352,18 +384,42 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   <>
 
                     <button
-                      onClick={handleGenerateWebsitePreview}
+                      onClick={handleCopyWebsitePreviewLink}
                       disabled={previewLoading}
                       className="btn-secondary text-xs py-2"
+                      title={websitePreviewCreatedAt ? `Latest preview created ${formatDate(websitePreviewCreatedAt)}` : undefined}
                     >
                       {previewLoading ? (
                         <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
                       ) : copied === 'website-preview-link' ? (
                         <><Check className="w-3.5 h-3.5 text-emerald-400" /> Preview link copied</>
+                      ) : websitePreviewToken ? (
+                        <><Copy className="w-3.5 h-3.5" /> Copy Website Preview Link</>
                       ) : (
                         <><Monitor className="w-3.5 h-3.5" /> Create Website Preview</>
                       )}
                     </button>
+                    {websitePreviewToken && (
+                      <>
+                        <button
+                          onClick={handleOpenWebsitePreview}
+                          className="btn-secondary text-xs py-2"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Open Preview
+                        </button>
+                        <button
+                          onClick={handleGenerateWebsitePreview}
+                          disabled={previewLoading}
+                          className="btn-secondary text-xs py-2"
+                        >
+                          {previewLoading ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regenerating...</>
+                          ) : (
+                            <><Monitor className="w-3.5 h-3.5" /> Regenerate Preview</>
+                          )}
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => handleShareAudit('en')}
                       disabled={shareLoading}
