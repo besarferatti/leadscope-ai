@@ -96,11 +96,12 @@ Deno.serve(async (req: Request) => {
     if (!token) return errorResponse("token is required");
     if (!language || !supportedLanguages.includes(language)) return errorResponse("language must be one of en, sq, or mk");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")?.trim();
+    if (!supabaseUrl || !supabaseAnonKey) return errorResponse("Supabase environment variables are not configured.", 500);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
-    const { data, error } = await serviceClient.rpc("get_shared_audit_report", { token });
+    const { data, error } = await supabaseClient.rpc("get_shared_audit_report", { token });
     const sharedReport = Array.isArray(data) ? data[0] : data;
     if (error) return errorResponse(error.message, 500);
     if (!sharedReport) return errorResponse("Report not found", 404);
