@@ -24,7 +24,7 @@ type Audit = {
   } | null;
 };
 
-type CanonicalIndustry = "dental" | "plumbing" | "electrician" | "roofing" | "hvac" | "construction" | "restaurant" | "cafe" | "beauty" | "auto" | "cleaning" | "landscaping" | "pest_control" | "moving" | "law" | "real_estate" | "fitness" | "hotel" | "accounting" | "veterinary" | "it_services" | "marketing" | "professional";
+type CanonicalIndustry = "dental" | "plumbing" | "electrician" | "roofing" | "hvac" | "construction" | "restaurant" | "cafe" | "beauty" | "nail_salon" | "auto" | "cleaning" | "landscaping" | "pest_control" | "moving" | "law" | "real_estate" | "fitness" | "hotel" | "accounting" | "veterinary" | "it_services" | "marketing" | "professional";
 type LayoutVariant = "medical" | "construction" | "restaurant" | "beauty" | "auto" | "professional";
 type HeroStyle = "split" | "bold" | "gallery" | "editorial" | "minimal" | "magazine" | "service";
 type CardStyle = "rounded" | "sharp" | "glass" | "editorial" | "bordered" | "shadow";
@@ -330,6 +330,14 @@ function matchesIndustry(industry: string, words: string[]) {
   return words.some((word) => normalized.includes(word));
 }
 
+const nailSalonSeoTerms = ["manicure", "pedicure", "nail art", "gel nails", "gel polish", "nail salon", "nail extensions", "nails"];
+
+function auditHasNailSalonSignals(audit: Audit | null) {
+  if (!audit?.seo_content_pack) return false;
+  const text = JSON.stringify(audit.seo_content_pack).toLowerCase();
+  return nailSalonSeoTerms.some((term) => text.includes(term));
+}
+
 function detectCanonicalIndustry(lead: Lead): CanonicalIndustry {
   const text = [lead.industry, lead.business_name, lead.website, lead.location].filter(Boolean).join(" ").toLowerCase();
   const has = (words: string[]) => words.some((word) => text.includes(word));
@@ -342,7 +350,8 @@ function detectCanonicalIndustry(lead: Lead): CanonicalIndustry {
   if (has(["dental", "dentist", "orthodont", "clinic"])) return "dental";
   if (has(["cafe", "coffee"])) return "cafe";
   if (has(["restaurant", "food", "bar", "bistro"])) return "restaurant";
-  if (has(["salon", "beauty", "spa", "hair", "barber", "nail", "esthetic"])) return "beauty";
+  if (has(["nail salon", "gel nails", "nail art", "acrylic nails", "nail spa", "manicure", "pedicure", "nails", "nail"])) return "nail_salon";
+  if (has(["salon", "beauty", "spa", "hair", "barber", "esthetic"])) return "beauty";
   if (has(["auto", "mechanic", "vehicle", "car", "garage", "tire"])) return "auto";
   if (has(["cleaning", "cleaner", "maid", "janitorial"])) return "cleaning";
   if (has(["landscaping", "landscaper", "lawn", "garden"] )) return "landscaping";
@@ -364,6 +373,20 @@ type IndustryWebsiteContent = ReturnType<typeof getIndustryWebsiteContent>;
 function getIndustryWebsiteContent(industry: CanonicalIndustry | string, location: string) {
   const place = location ? ` in ${location}` : "";
   const canonical = industry as CanonicalIndustry;
+  if (canonical === "nail_salon") {
+    return { displayLabel: "Nail Salon", services: [
+      { title: "Manicure", description: "Detailed nail shaping, cuticle care, and polish for a clean, polished finish." },
+      { title: "Pedicure", description: "Relaxing foot and nail care that leaves clients refreshed and sandal-ready." },
+      { title: "Gel Polish", description: "Glossy, durable gel color applied with careful prep for longer-lasting wear." },
+      { title: "Nail Art", description: "Custom designs, accents, and creative details tailored to each client’s style." },
+      { title: "Nail Extensions", description: "Beautiful length and shape enhancements finished with professional care." },
+    ], cta: "Book Your Nail Appointment", style: "Elegant nail salon, manicure closeups, polished hands, gel nails, pedicure care, soft luxury design.", pexelsQueries: ["nail salon", "manicure", "nail art", "gel nails", "pedicure salon", "nail technician"], gallery: [
+      { title: "Manicure Care", description: "Close-up service cards for shaping, cuticle care, polish, and glossy finished nails." },
+      { title: "Gel Polish Styles", description: "Soft luxury visuals that highlight durable color and polished hands." },
+      { title: "Nail Art Details", description: "Creative gallery moments for custom accents, designs, and salon craftsmanship." },
+      { title: "Pedicure Experience", description: "Relaxed pedicure care visuals that feel comfortable, clean, and premium." },
+    ], hero: "Beautiful Nails, Polished With Care", subheadline: "Professional manicures, pedicures, gel polish, and custom nail designs in a comfortable salon experience." };
+  }
   if (canonical === "electrician") {
     return { displayLabel: "Electrical Services", services: [
       { title: "Electrical Repairs", description: "Responsive troubleshooting and repairs for outlets, breakers, fixtures, and electrical issues." },
@@ -533,6 +556,7 @@ function containsForbiddenIndustryText(value: unknown, canonicalIndustry: Canoni
     electrician: ["plumbing", "plumber", "pipe", "drain", "construction", "contractor", "residential construction", "roofing", "roofer", "hvac"],
     plumbing: ["electrician", "electrical", "wiring", "construction", "contractor", "residential construction", "roofing", "roofer", "hvac"],
     construction: ["plumbing", "plumber", "pipe", "drain", "electrician", "electrical", "wiring", "hvac", "air conditioning", "furnace"],
+    nail_salon: ["hair styling", "haircuts", "hair color", "barber", "bridal hair", "blowout", "hair stylist"],
   };
   return (forbidden[canonicalIndustry] || []).some((word) => text.includes(word));
 }
@@ -718,8 +742,10 @@ Deno.serve(async (req: Request) => {
     if ((profile as UserProfile).role !== "admin" && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
     const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
+    const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const typedAudit = audit as Audit | null;
     const previousDesigns = extractPreviousDesigns(previousPreviewRows as Array<{ preview_data: unknown }> | null);
-    const canonicalIndustry = detectCanonicalIndustry(typedLead);
+    const canonicalIndustry = auditHasNailSalonSignals(typedAudit) ? "nail_salon" : detectCanonicalIndustry(typedLead);
     const industryContent = getIndustryWebsiteContent(canonicalIndustry, typedLead.location);
     const selectedStructureVariant = selectStructureVariant(canonicalIndustry, previousDesigns);
     const selectedSectionOrder = normalizeSectionOrder(STRUCTURE_ORDERS[selectedStructureVariant], selectedStructureVariant);
@@ -729,8 +755,6 @@ Deno.serve(async (req: Request) => {
       section_order: selectedSectionOrder,
     };
 
-    const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const typedAudit = audit as Audit | null;
     let previewData = fallbackPreview(typedLead, typedAudit, selectedDesign, canonicalIndustry);
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
