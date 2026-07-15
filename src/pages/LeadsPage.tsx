@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Plus, Download, Upload, Filter, Star, ChevronRight, Trash2,
-  Globe, Phone, Mail, Search, X, AlertCircle,
+  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -53,6 +53,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [filterSearch, setFilterSearch] = useState(initialSearchId ?? '');
   const [filterQuery, setFilterQuery] = useState('');
   const [filterWebsiteStatus, setFilterWebsiteStatus] = useState<WebsiteStatus | ''>('');
+  const [filterSaved, setFilterSaved] = useState<'all' | 'saved' | 'unsaved'>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'lead_score' | 'business_name'>('created_at');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +131,17 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       await loadData();
     }
     setSaving(false);
+  }
+
+  async function handleToggleSaved(lead: Lead, event?: React.MouseEvent) {
+    event?.stopPropagation();
+    const savedAt = lead.saved_at ? null : new Date().toISOString();
+    const { error: updateError } = await supabase.from('leads').update({ saved_at: savedAt }).eq('id', lead.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, saved_at: savedAt } : item));
   }
 
   async function handleDelete(id: string) {
@@ -211,6 +223,8 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       if (filterStatus && l.status !== filterStatus) return false;
       if (filterSearch && l.lead_search_id !== filterSearch) return false;
       if (filterWebsiteStatus && getWebsiteStatus(l.website) !== filterWebsiteStatus) return false;
+      if (filterSaved === 'saved' && !l.saved_at) return false;
+      if (filterSaved === 'unsaved' && l.saved_at) return false;
       if (filterQuery) {
         const q = filterQuery.toLowerCase();
         return l.business_name.toLowerCase().includes(q) || l.location.toLowerCase().includes(q) || l.industry.toLowerCase().includes(q) || l.email.toLowerCase().includes(q);
@@ -351,13 +365,18 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="none">No Website</option>
           <option value="social_only">Social-Only Website</option>
         </select>
+        <select className="select w-auto" value={filterSaved} onChange={e => setFilterSaved(e.target.value as typeof filterSaved)}>
+          <option value="all">All Leads</option>
+          <option value="saved">Saved Leads</option>
+          <option value="unsaved">Unsaved Leads</option>
+        </select>
         <select className="select w-auto" value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
           <option value="created_at">Newest First</option>
           <option value="lead_score">Highest Score</option>
           <option value="business_name">A → Z</option>
         </select>
-        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus) && (
-          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus || filterSaved !== 'all') && (
+          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); setFilterSaved('all'); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             <X className="w-3.5 h-3.5" /> Clear
           </button>
         )}
@@ -401,7 +420,10 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
                   return (
                     <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-5 py-3.5">
-                      <div className="font-medium text-slate-200 truncate max-w-[180px]">{lead.business_name}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-medium text-slate-200 truncate max-w-[180px]">{lead.business_name}</div>
+                        {lead.saved_at && <span className="badge bg-blue-500/10 text-blue-300 text-[10px] px-1.5 py-0.5"><BookmarkCheck className="w-3 h-3" /> Saved</span>}
+                      </div>
                       <div className="text-slate-500 text-xs truncate max-w-[180px]">{lead.location}</div>
                     </td>
                     <td className="px-4 py-3.5 text-slate-400 hidden md:table-cell">{lead.industry || '—'}</td>
@@ -443,6 +465,14 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
                     <td className="px-4 py-3.5"><StatusBadge status={lead.status} /></td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={e => handleToggleSaved(lead, e)}
+                          className={`flex items-center gap-1 text-xs transition-colors ${lead.saved_at ? 'text-blue-300 hover:text-blue-200' : 'text-slate-500 hover:text-blue-300'}`}
+                          title={lead.saved_at ? 'Unsave lead' : 'Save lead'}
+                        >
+                          {lead.saved_at ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                          <span className="hidden xl:inline">{lead.saved_at ? 'Saved' : 'Save'}</span>
+                        </button>
                         <button onClick={() => setDeleteId(lead.id)} className="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
                           <Trash2 className="w-4 h-4" />
                         </button>
