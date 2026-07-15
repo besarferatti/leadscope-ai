@@ -32,69 +32,52 @@ function getGoogleCategory(place: { primaryTypeDisplayName?: { text?: string } |
     : place.primaryTypeDisplayName?.text?.trim() || "";
 }
 
-function normalizeCategory(value?: string | null) {
+function normalizeCategoryText(value?: string | null) {
   return normalizeKey(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function isBroadGoogleCategory(category?: string | null) {
-  const normalized = normalizeCategory(category);
-  return normalized === "contractor"
-    || normalized === "general contractor"
-    || normalized === "construction"
-    || normalized === "construction company"
-    || normalized === "building contractor"
-    || normalized === "service establishment"
-    || normalized === "establishment"
-    || normalized === "point of interest"
-    || normalized === "local business"
-    || normalized === "services";
+function isBroadCategory(category?: string | null) {
+  const normalized = normalizeCategoryText(category);
+  return new Set([
+    "services",
+    "service",
+    "local services",
+    "professional services",
+    "business service",
+    "business services",
+    "local business",
+    "establishment",
+    "point of interest",
+    "contractor",
+    "general contractor",
+    "construction",
+    "construction company",
+    "store",
+    "company",
+    "consultant",
+    "repair service",
+    "service establishment",
+    "organization",
+  ]).has(normalized);
 }
 
-function categoryFromSelectedNiche(niche?: string | null) {
-  const normalized = normalizeCategory(niche);
+function isSpecificCategory(category?: string | null) {
+  return Boolean(normalizeCategoryText(category)) && !isBroadCategory(category);
+}
 
-  if (/\b(hvac|heating|cooling|air conditioning|ac repair|ventilation)\b/.test(normalized)) {
-    return "HVAC contractor";
-  }
-  if (/\b(plumbing|plumber)\b/.test(normalized)) {
-    return "Plumber";
-  }
-  if (/\b(electrician|electrical)\b/.test(normalized)) {
-    return "Electrician";
-  }
-  if (/\b(roofing|roofer)\b/.test(normalized)) {
-    return "Roofing contractor";
-  }
-  if (/\b(construction|contractor|builder|renovation|remodel)\b/.test(normalized)) {
-    return "General Contractor";
-  }
-  if (/\b(dental|dentist)\b/.test(normalized)) {
-    return "Dental clinic";
-  }
-  if (/\brestaurant\b/.test(normalized)) {
-    return "Restaurant";
-  }
-  if (/\b(beauty|salon|hair|nails)\b/.test(normalized)) {
-    return "Beauty salon";
-  }
-  if (/\b(auto repair|mechanic|car repair)\b/.test(normalized)) {
-    return "Auto repair shop";
-  }
+function cleanSelectedNiche(niche?: string | null) {
+  return (niche ?? "").trim().replace(/\s+/g, " ");
+}
 
-  return "";
+function prettifyGoogleType(type?: string | null) {
+  return normalizeCategoryText(type).replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function isBroadFallbackIndustry(industry?: string | null) {
-  const normalized = normalizeKey(industry);
+  const normalized = normalizeCategoryText(industry);
   return !normalized
     || normalized === "unknown"
-    || normalized === "construction"
-    || normalized === "services"
-    || normalized === "local services"
-    || normalized === "professional services"
-    || normalized === "construction services"
-    || normalized === "general contractor"
-    || normalized === "contractor";
+    || isBroadCategory(industry);
 }
 
 function isMoreSpecificIndustry(industry: string, existingIndustry?: string | null) {
@@ -330,14 +313,23 @@ Deno.serve(async (req: Request) => {
       const googlePrimaryTypeDisplayName = (place as { primaryTypeDisplayName?: { text?: string } | string })
         .primaryTypeDisplayName;
       const googleCategory = getGoogleCategory({ primaryTypeDisplayName: googlePrimaryTypeDisplayName });
-      const nicheCategory = categoryFromSelectedNiche(niche);
-      const industry = googleCategory && !isBroadGoogleCategory(googleCategory)
-        ? googleCategory
-        : nicheCategory
-          || googleCategory
-          || googlePrimaryType
-          || types[0]
-          || "Unknown";
+      const selectedCategory = cleanSelectedNiche(niche);
+      const primaryTypeCategory = prettifyGoogleType(googlePrimaryType);
+      const firstTypeCategory = prettifyGoogleType(types[0]);
+
+      let industry = "";
+
+      if (isSpecificCategory(googleCategory)) {
+        industry = googleCategory;
+      } else if (isSpecificCategory(selectedCategory)) {
+        industry = selectedCategory;
+      } else if (isSpecificCategory(primaryTypeCategory)) {
+        industry = primaryTypeCategory;
+      } else if (isSpecificCategory(firstTypeCategory)) {
+        industry = firstTypeCategory;
+      } else {
+        industry = googleCategory || selectedCategory || primaryTypeCategory || firstTypeCategory || "Unknown";
+      }
 
       const existingLead = (mapsUrl && existingByGoogleMapsUrl.get(normalizeKey(mapsUrl)))
         || (website && existingByWebsite.get(website))
@@ -345,16 +337,17 @@ Deno.serve(async (req: Request) => {
         || (!nameAddr.endsWith("_") && existingByNameAddress.get(nameAddr));
       const existingIndustry = existingLead?.industry;
 
-      console.log("Lead industry decision", {
+      console.log("Lead industry resolution", {
         businessName: place.name,
         selectedNiche: niche,
         googleCategory,
-        nicheCategory,
-        googlePrimaryType,
+        selectedCategory,
+        googlePrimaryType: place.primaryType,
         googlePrimaryTypeDisplayName,
-        googleTypes: types,
-        finalIndustry: industry,
-        isGoogleCategoryBroad: isBroadGoogleCategory(googleCategory),
+        googleTypes: place.types,
+        resolvedIndustry: industry,
+        googleCategoryWasBroad: isBroadCategory(googleCategory),
+        selectedCategoryWasSpecific: isSpecificCategory(selectedCategory),
         action: existingLead ? "update-existing" : "insert-new",
       });
 
