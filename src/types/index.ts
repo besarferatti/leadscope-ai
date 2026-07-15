@@ -8,6 +8,7 @@ export type LeadStatus =
   | 'Closed';
 
 export type SearchStatus = 'pending' | 'running' | 'completed';
+export type WebsiteStatusFilter = 'all' | 'has_website' | 'no_website' | 'social_only';
 
 export interface LeadSearch {
   id: string;
@@ -17,6 +18,7 @@ export interface LeadSearch {
   service_offer: string;
   language: string;
   status: SearchStatus;
+  website_status_filter?: WebsiteStatusFilter;
   created_at: string;
   leads_count?: number;
 }

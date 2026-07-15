@@ -2,6 +2,7 @@ import { LeadStatus } from '../types';
 
 
 export type WebsiteStatus = 'real' | 'none' | 'social_only';
+export type WebsiteStatusFilter = 'all' | 'has_website' | 'no_website' | 'social_only';
 
 const SOCIAL_ONLY_WEBSITE_HOSTS = [
   'instagram.com',
@@ -50,6 +51,17 @@ export function getWebsiteStatus(website?: string | null): WebsiteStatus {
   }
 
   return 'none';
+}
+
+export const WEBSITE_STATUS_FILTER_OPTIONS: Array<{ value: WebsiteStatusFilter; label: string; cardLabel: string }> = [
+  { value: 'all', label: 'All Websites', cardLabel: 'All websites' },
+  { value: 'has_website', label: 'Has Real Website', cardLabel: 'Real websites only' },
+  { value: 'no_website', label: 'No Website', cardLabel: 'No website only' },
+  { value: 'social_only', label: 'Social-Only Website', cardLabel: 'Social-only only' },
+];
+
+export function getWebsiteStatusFilterLabel(filter?: string | null): string {
+  return WEBSITE_STATUS_FILTER_OPTIONS.find(option => option.value === filter)?.cardLabel ?? 'All websites';
 }
 
 export function getStatusColor(status: LeadStatus | string): string {

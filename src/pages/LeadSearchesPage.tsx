@@ -10,7 +10,13 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
-import { formatDate, getSearchStatusColor, LANGUAGES } from '../lib/utils';
+import {
+  formatDate,
+  getSearchStatusColor,
+  getWebsiteStatusFilterLabel,
+  LANGUAGES,
+  WEBSITE_STATUS_FILTER_OPTIONS,
+} from '../lib/utils';
 import { canGenerateLead, isAdmin, incrementUsage } from '../lib/plans';
 import { trackEvent } from '../lib/analytics';
 
@@ -24,12 +30,13 @@ const defaultForm = {
   location: '',
   service_offer: '',
   language: 'English',
+  website_status_filter: 'all',
 };
 
 interface FindLeadsState {
   loading: boolean;
   error: string;
-  result: { inserted: number; skipped: number } | null;
+  result: { inserted: number; updated: number; skipped: number; filtered_out_by_website_status: number } | null;
 }
 
 export function LeadSearchesPage({ onNavigate }: Props) {
@@ -81,6 +88,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       location: form.location.trim(),
       service_offer: form.service_offer.trim(),
       language: form.language,
+      website_status_filter: form.website_status_filter,
       status: 'pending',
     });
     if (err) setError(err.message);
@@ -122,10 +130,22 @@ export function LeadSearchesPage({ onNavigate }: Props) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ search_id: search.id, niche: search.niche, location: search.location }),
+        body: JSON.stringify({
+          search_id: search.id,
+          niche: search.niche,
+          location: search.location,
+          website_status_filter: search.website_status_filter ?? 'all',
+        }),
       });
 
-      const json = await res.json() as { error?: string; inserted?: number; skipped?: number; message?: string };
+      const json = await res.json() as {
+        error?: string;
+        inserted?: number;
+        updated?: number;
+        skipped?: number;
+        filtered_out_by_website_status?: number;
+        message?: string;
+      };
 
       if (!res.ok || json.error) {
         const errMsg = json.error ?? `Request failed (${res.status})`;
@@ -137,6 +157,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
 
       const inserted = json.inserted ?? 0;
       const skipped = json.skipped ?? 0;
+      const updated = json.updated ?? 0;
+      const filtered_out_by_website_status = json.filtered_out_by_website_status ?? 0;
 
       // Increment usage
       if (inserted > 0 && user && !isAdmin(profile)) {
@@ -144,8 +166,15 @@ export function LeadSearchesPage({ onNavigate }: Props) {
         await refreshProfile();
       }
 
-      trackEvent('lead_search_completed', { search_id: search.id, inserted, skipped });
-      setFindState(prev => ({ ...prev, [search.id]: { loading: false, error: '', result: { inserted, skipped } } }));
+      trackEvent('lead_search_completed', { search_id: search.id, inserted, updated, skipped, filtered_out_by_website_status });
+      setFindState(prev => ({
+        ...prev,
+        [search.id]: {
+          loading: false,
+          error: '',
+          result: { inserted, updated, skipped, filtered_out_by_website_status },
+        },
+      }));
       setSearches(prev => prev.map(s => s.id === search.id ? { ...s, status: 'completed' } : s));
 
       if (inserted > 0) {
@@ -206,6 +235,18 @@ export function LeadSearchesPage({ onNavigate }: Props) {
                 {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">Website Status</label>
+              <select
+                className="select"
+                value={form.website_status_filter}
+                onChange={e => setForm(p => ({ ...p, website_status_filter: e.target.value }))}
+              >
+                {WEBSITE_STATUS_FILTER_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="sm:col-span-2 flex gap-3 justify-end pt-2">
               <button type="button" onClick={() => { setShowForm(false); setForm(defaultForm); setError(''); }} className="btn-secondary">Cancel</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Creating...' : 'Create Search'}</button>
@@ -246,6 +287,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
                     <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="truncate">{s.location}</span>
                   </div>
+                  <div className="text-slate-500 text-xs">{getWebsiteStatusFilterLabel(s.website_status_filter)}</div>
                   {s.service_offer && (
                     <div className="flex items-center gap-2 text-slate-400 text-sm">
                       <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
@@ -264,8 +306,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
                   <div className="flex items-center gap-2 p-3 mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                     <p className="text-emerald-300 text-xs">
                       {fs.result.inserted === 0
-                        ? 'No leads found for this query.'
-                        : `${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} found${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}. Redirecting…`}
+                        ? `No leads saved for this query${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}.`
+                        : `${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} found${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}. Redirecting…`}
                     </p>
                   </div>
                 )}
