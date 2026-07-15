@@ -31,6 +31,8 @@ type VisualDensity = "minimal" | "balanced" | "rich";
 type AccentStyle = "soft" | "bold" | "premium" | "warm" | "technical";
 type ImageStyle = "clean" | "cinematic" | "editorial" | "project" | "gallery" | "luxury";
 type StructureVariant = "classic" | "service_first" | "gallery_first" | "story_driven" | "trust_first" | "cta_focused" | "editorial" | "project_showcase";
+type PreviewImage = { url: string; alt: string; photographer?: string; source: "pexels"; source_url?: string };
+type PreviewImages = { hero: PreviewImage; gallery: PreviewImage[] };
 
 type VisualTheme = {
   design_variant_id: string;
@@ -190,6 +192,7 @@ type WebsitePreviewData = {
   about_intro: string;
   contact: { headline: string; body: string; website: string; location: string };
   visual_theme: VisualTheme;
+  images?: PreviewImages;
 };
 
 function jsonResponse(data: unknown, status = 200) {
@@ -258,6 +261,38 @@ function asVisualTheme(value: unknown, fallback: VisualTheme): VisualTheme {
     image_sections: asImageSections(theme.image_sections, fallback.image_sections),
   };
 }
+
+function sanitizeImageUrl(value: unknown) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? value : "";
+  } catch {
+    return "";
+  }
+}
+function asPreviewImage(value: unknown): PreviewImage | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const image = value as Record<string, unknown>;
+  const url = sanitizeImageUrl(image.url);
+  if (!url || image.source !== "pexels") return null;
+  const sourceUrl = sanitizeImageUrl(image.source_url);
+  return {
+    url,
+    alt: asString(image.alt, "Business preview photo"),
+    photographer: asString(image.photographer) || undefined,
+    source: "pexels",
+    source_url: sourceUrl || undefined,
+  };
+}
+function asPreviewImages(value: unknown, fallback?: PreviewImages): PreviewImages | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return fallback;
+  const images = value as Record<string, unknown>;
+  const hero = asPreviewImage(images.hero) || fallback?.hero;
+  const gallery = Array.isArray(images.gallery) ? images.gallery.map(asPreviewImage).filter((item): item is PreviewImage => Boolean(item)).slice(0, 6) : fallback?.gallery || [];
+  return hero ? { hero, gallery } : fallback;
+}
+
 function asContact(value: unknown, fallback: WebsitePreviewData["contact"]) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return fallback;
   const contact = value as Record<string, unknown>;
@@ -285,6 +320,7 @@ function sanitizePreviewData(value: unknown, fallback: WebsitePreviewData): Webs
     about_intro: asString(candidate.about_intro, fallback.about_intro),
     contact: asContact(candidate.contact, fallback.contact),
     visual_theme: asVisualTheme(candidate.visual_theme, fallback.visual_theme),
+    images: asPreviewImages(candidate.images, fallback.images),
   };
 }
 
@@ -405,6 +441,70 @@ function extractPreviousDesigns(rows: Array<{ preview_data: unknown }> | null): 
       image_style: asString(theme.image_style) as ImageStyle,
     };
   });
+}
+
+type PexelsPhoto = {
+  url?: string;
+  photographer?: string;
+  alt?: string;
+  src?: { large2x?: string; large?: string; medium?: string };
+};
+
+function getPexelsQueryVariants(industry: string, visualTheme: VisualTheme) {
+  const value = `${industry} ${visualTheme.layout_variant || ""}`.toLowerCase();
+  const variants = matchesIndustry(value, ["dental", "dentist", "orthodont", "clinic", "medical", "health"])
+    ? ["modern dental clinic", "dentist patient care", "bright clinic interior"]
+    : matchesIndustry(value, ["construction", "contractor", "remodel", "renovation", "builder", "roofing", "plumb", "electric"])
+      ? ["home renovation", "construction project", "contractor tools", "modern house construction"]
+      : matchesIndustry(value, ["restaurant", "cafe", "coffee", "food", "bar", "bistro"])
+        ? ["restaurant food", "dining table", "chef plating", "restaurant interior"]
+        : matchesIndustry(value, ["salon", "beauty", "spa", "hair", "barber", "nail", "esthetic"])
+          ? ["beauty salon", "hair stylist", "nail salon", "beauty treatment"]
+          : matchesIndustry(value, ["auto", "mechanic", "vehicle", "car", "repair", "garage", "tire"])
+            ? ["auto repair garage", "mechanic working", "car diagnostics", "vehicle maintenance"]
+            : ["business team", "modern office", "local business service"];
+  const styleQuery = visualTheme.image_style ? variants.map((query) => `${query} ${visualTheme.image_style}`) : [];
+  return [...variants, ...styleQuery];
+}
+
+async function fetchPexelsImages(query: string, perPage: number): Promise<PexelsPhoto[]> {
+  const apiKey = Deno.env.get("PEXELS_API_KEY")?.trim();
+  if (!apiKey) return [];
+  try {
+    const url = new URL("https://api.pexels.com/v1/search");
+    url.searchParams.set("query", query);
+    url.searchParams.set("per_page", String(Math.max(1, Math.min(perPage, 12))));
+    url.searchParams.set("orientation", "landscape");
+    const response = await fetch(url, { headers: { Authorization: apiKey } });
+    if (!response.ok) return [];
+    const data = await response.json() as { photos?: PexelsPhoto[] };
+    return Array.isArray(data.photos) ? data.photos : [];
+  } catch {
+    return [];
+  }
+}
+
+async function buildPreviewImages(previewData: WebsitePreviewData): Promise<PreviewImages | undefined> {
+  const queries = getPexelsQueryVariants(previewData.industry || "", previewData.visual_theme);
+  const shuffledQueries = [...queries].sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2147483648);
+  const photos: PexelsPhoto[] = [];
+  for (const query of shuffledQueries.slice(0, 3)) {
+    photos.push(...await fetchPexelsImages(query, 8));
+    if (photos.length >= 5) break;
+  }
+  const uniquePhotos = photos.filter((photo, index, list) => photo.url && list.findIndex((item) => item.url === photo.url) === index);
+  if (!uniquePhotos.length) return undefined;
+  const shuffledPhotos = [...uniquePhotos].sort(() => crypto.getRandomValues(new Uint32Array(1))[0] - 2147483648);
+  const toImage = (photo: PexelsPhoto, size: "hero" | "gallery"): PreviewImage | null => {
+    const url = sanitizeImageUrl(size === "hero" ? photo.src?.large2x || photo.src?.large : photo.src?.medium || photo.src?.large);
+    if (!url) return null;
+    const sourceUrl = sanitizeImageUrl(photo.url);
+    return { url, alt: photo.alt || `${previewData.business_name} ${previewData.industry} photo`, photographer: photo.photographer || undefined, source: "pexels", source_url: sourceUrl || undefined };
+  };
+  const hero = toImage(shuffledPhotos[0], "hero");
+  if (!hero) return undefined;
+  const gallery = shuffledPhotos.slice(1, 5).map((photo) => toImage(photo, "gallery")).filter((item): item is PreviewImage => Boolean(item));
+  return { hero, gallery };
 }
 
 function fallbackPreview(lead: Lead, audit: Audit | null, selectedDesign?: DesignVariant): WebsitePreviewData {
@@ -572,6 +672,8 @@ Return raw JSON only with this exact safe public shape and no extra keys: ${JSON
     previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
     previewData.visual_theme.structure_variant = selectedStructureVariant;
     previewData.visual_theme.section_order = normalizeSectionOrder(selectedSectionOrder, selectedStructureVariant);
+    previewData.images = await buildPreviewImages(previewData);
+    previewData = sanitizePreviewData(previewData, fallbackPreview(typedLead, typedAudit, selectedDesign));
 
     const preview_token = createPreviewToken();
     const { data: saved, error: insertError } = await serviceClient.from("website_previews").insert({ lead_id, user_id: user.id, preview_token, preview_data: previewData }).select("preview_token, preview_data, created_at").single();

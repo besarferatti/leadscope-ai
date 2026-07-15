@@ -135,6 +135,20 @@ export interface WebsitePreview {
   created_at: string;
 }
 
+
+export interface WebsitePreviewImage {
+  url: string;
+  alt: string;
+  photographer?: string;
+  source: 'pexels';
+  source_url?: string;
+}
+
+export interface WebsitePreviewImages {
+  hero: WebsitePreviewImage;
+  gallery: WebsitePreviewImage[];
+}
+
 export interface WebsitePreviewData {
   business_name: string;
   industry: string;
@@ -153,6 +167,7 @@ export interface WebsitePreviewData {
     website: string;
     location: string;
   };
+  images?: WebsitePreviewImages;
   visual_theme?: {
     design_variant_id?: string;
     structure_variant?: "classic" | "service_first" | "gallery_first" | "story_driven" | "trust_first" | "cta_focused" | "editorial" | "project_showcase";
