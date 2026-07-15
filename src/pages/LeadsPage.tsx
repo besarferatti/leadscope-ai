@@ -12,7 +12,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
-import { exportLeadsCSV, LEAD_STATUSES, INDUSTRIES } from '../lib/utils';
+import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type WebsiteStatus } from '../lib/utils';
 import {
   canGenerateLead, canExportCSV, canUseBulkActions, isAdmin, incrementUsage,
 } from '../lib/plans';
@@ -52,6 +52,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterSearch, setFilterSearch] = useState(initialSearchId ?? '');
   const [filterQuery, setFilterQuery] = useState('');
+  const [filterWebsiteStatus, setFilterWebsiteStatus] = useState<WebsiteStatus | ''>('');
   const [sortBy, setSortBy] = useState<'created_at' | 'lead_score' | 'business_name'>('created_at');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -209,6 +210,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     .filter(l => {
       if (filterStatus && l.status !== filterStatus) return false;
       if (filterSearch && l.lead_search_id !== filterSearch) return false;
+      if (filterWebsiteStatus && getWebsiteStatus(l.website) !== filterWebsiteStatus) return false;
       if (filterQuery) {
         const q = filterQuery.toLowerCase();
         return l.business_name.toLowerCase().includes(q) || l.location.toLowerCase().includes(q) || l.industry.toLowerCase().includes(q) || l.email.toLowerCase().includes(q);
@@ -343,13 +345,19 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="">All Searches</option>
           {searches.map(s => <option key={s.id} value={s.id}>{s.niche} — {s.location}</option>)}
         </select>
+        <select className="select w-auto" value={filterWebsiteStatus} onChange={e => setFilterWebsiteStatus(e.target.value as WebsiteStatus | '')}>
+          <option value="">All Websites</option>
+          <option value="real">Has Real Website</option>
+          <option value="none">No Website</option>
+          <option value="social_only">Social-Only Website</option>
+        </select>
         <select className="select w-auto" value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
           <option value="created_at">Newest First</option>
           <option value="lead_score">Highest Score</option>
           <option value="business_name">A → Z</option>
         </select>
-        {(filterStatus || filterSearch || filterQuery) && (
-          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus) && (
+          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             <X className="w-3.5 h-3.5" /> Clear
           </button>
         )}
@@ -382,8 +390,16 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredLeads.map(lead => (
-                  <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
+                {filteredLeads.map(lead => {
+                  const websiteStatus = getWebsiteStatus(lead.website);
+                  const websiteStatusBadge = {
+                    real: { label: 'Website', className: 'bg-emerald-500/10 text-emerald-400' },
+                    none: { label: 'No website', className: 'bg-slate-700/60 text-slate-400' },
+                    social_only: { label: 'Social only', className: 'bg-amber-500/10 text-amber-400' },
+                  }[websiteStatus];
+
+                  return (
+                    <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-5 py-3.5">
                       <div className="font-medium text-slate-200 truncate max-w-[180px]">{lead.business_name}</div>
                       <div className="text-slate-500 text-xs truncate max-w-[180px]">{lead.location}</div>
@@ -391,6 +407,9 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
                     <td className="px-4 py-3.5 text-slate-400 hidden md:table-cell">{lead.industry || '—'}</td>
                     <td className="px-4 py-3.5 hidden lg:table-cell">
                       <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`badge text-[10px] px-1.5 py-0.5 ${websiteStatusBadge.className}`}>{websiteStatusBadge.label}</span>
+                        </div>
                         {lead.website && (
                           <a href={lead.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs transition-colors truncate max-w-[160px]">
                             <Globe className="w-3 h-3 flex-shrink-0" />
@@ -432,8 +451,9 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
                         </button>
                       </div>
                     </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,5 +1,57 @@
 import { LeadStatus } from '../types';
 
+
+export type WebsiteStatus = 'real' | 'none' | 'social_only';
+
+const SOCIAL_ONLY_WEBSITE_HOSTS = [
+  'instagram.com',
+  'facebook.com',
+  'fb.com',
+  'tiktok.com',
+  'linkedin.com',
+  'linktr.ee',
+  'beacons.ai',
+  'wixsite.com',
+  'business.site',
+  'maps.app.goo.gl',
+];
+
+const SOCIAL_ONLY_WEBSITE_PATHS = [
+  'google.com/maps',
+  'maps.app.goo.gl',
+];
+
+function getWebsiteHost(website: string): string {
+  const normalized = website.trim().replace(/^mailto:/i, '');
+  try {
+    return new URL(normalized.match(/^https?:\/\//i) ? normalized : `https://${normalized}`).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+export function getWebsiteStatus(website?: string | null): WebsiteStatus {
+  const trimmedWebsite = website?.trim();
+
+  if (!trimmedWebsite) return 'none';
+
+  const lowerWebsite = trimmedWebsite.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+  const host = getWebsiteHost(trimmedWebsite);
+
+  if (
+    SOCIAL_ONLY_WEBSITE_PATHS.some(path => lowerWebsite.includes(path)) ||
+    SOCIAL_ONLY_WEBSITE_HOSTS.some(socialHost => host === socialHost || host.endsWith(`.${socialHost}`))
+  ) {
+    return 'social_only';
+  }
+
+  if (/^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+([/:?#].*)?$/i.test(lowerWebsite)) {
+    return 'real';
+  }
+
+  return 'none';
+}
+
 export function getStatusColor(status: LeadStatus | string): string {
   switch (status) {
     case 'New': return 'bg-slate-700 text-slate-300';
