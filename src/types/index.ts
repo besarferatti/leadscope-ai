@@ -154,10 +154,20 @@ export interface WebsitePreviewData {
     location: string;
   };
   visual_theme?: {
+    design_variant_id?: string;
+    layout_variant?: "medical" | "construction" | "restaurant" | "beauty" | "auto" | "professional";
+    color_theme?: string;
+    hero_style?: "split" | "bold" | "gallery" | "editorial" | "minimal" | "magazine" | "service";
+    section_order?: string[];
+    card_style?: "rounded" | "sharp" | "glass" | "editorial" | "bordered" | "shadow";
+    visual_density?: "minimal" | "balanced" | "rich";
+    accent_style?: "soft" | "bold" | "premium" | "warm" | "technical";
+    image_style?: "clean" | "cinematic" | "editorial" | "project" | "gallery" | "luxury";
     industry_style: string;
     hero_visual_title: string;
     hero_visual_description: string;
     image_keywords: string[];
-    gallery_cards: Array<{ title: string; description: string }>;
+    gallery_cards: Array<{ title: string; description: string; image_prompt?: string; image_alt?: string }>;
+    image_sections?: Array<{ title: string; description: string; image_alt: string; visual_type: "hero" | "gallery" | "service" | "trust" | "cta" }>;
   };
 }
