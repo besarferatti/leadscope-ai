@@ -157,7 +157,7 @@ function enforceAuditLimit(profile: UserProfile): string | null {
   if (!profile.is_active) return "Your account is inactive. Please contact support.";
   if (profile.current_plan === "free_trial" && new Date(profile.trial_ends_at) < new Date()) return "Your free trial has ended. Upgrade your plan to continue using LeadScope AI.";
   const limit = auditLimits[profile.current_plan] ?? auditLimits.free_trial;
-  if (limit !== -1 && profile.audits_used_this_month >= limit) return "You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites.";
+  if (limit !== -1 && profile.audits_used_this_month >= limit) return profile.current_plan === "free_trial" ? "You’ve reached your free trial limit of 25 audits. Upgrade to continue." : "You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites.";
   return null;
 }
 

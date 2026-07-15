@@ -50,7 +50,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     name: 'Free Trial',
     monthlyPrice: 0,
     yearlyPrice: 0,
-    leadsLimit: 50,
+    leadsLimit: 100,
     auditsLimit: 25,
     messagesLimit: 25,
     usersLimit: 1,
@@ -239,6 +239,7 @@ export function canGenerateLead(profile: UserProfile | null): { allowed: boolean
   if (base) return base;
   const limits = getPlanLimits(profile);
   if (limits.leadsLimit !== -1 && profile!.leads_used_this_month >= limits.leadsLimit) {
+    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 100 saved leads. Upgrade to continue." };
     return { allowed: false, message: "You've reached your monthly lead limit. Upgrade your plan to continue generating more leads." };
   }
   return { allowed: true };
@@ -249,6 +250,7 @@ export function canRunAudit(profile: UserProfile | null): { allowed: boolean; me
   if (base) return base;
   const limits = getPlanLimits(profile);
   if (limits.auditsLimit !== -1 && profile!.audits_used_this_month >= limits.auditsLimit) {
+    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 25 audits. Upgrade to continue." };
     return { allowed: false, message: "You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites." };
   }
   return { allowed: true };
@@ -259,6 +261,7 @@ export function canGenerateMessage(profile: UserProfile | null): { allowed: bool
   if (base) return base;
   const limits = getPlanLimits(profile);
   if (limits.messagesLimit !== -1 && profile!.messages_used_this_month >= limits.messagesLimit) {
+    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 25 outreach messages. Upgrade to continue." };
     return { allowed: false, message: "You've reached your monthly outreach message limit. Upgrade your plan to generate more personalized messages." };
   }
   return { allowed: true };

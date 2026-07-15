@@ -7,7 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type UserProfile = { id: string; role: "admin" | "user" };
+type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
+type UserProfile = { id: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; is_active: boolean };
+const FREE_TRIAL_WEBSITE_PREVIEW_LIMIT = 5;
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string };
 type Audit = {
   summary: string | null;
@@ -733,13 +735,29 @@ Deno.serve(async (req: Request) => {
     const { lead_id } = await req.json() as { lead_id?: string };
     if (!lead_id) return errorResponse("lead_id is required");
 
-    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role").eq("id", user.id).maybeSingle();
+    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role, current_plan, trial_ends_at, is_active").eq("id", user.id).maybeSingle();
     if (profileError || !profile) return errorResponse("User profile not found", 404);
+    const typedProfile = profile as UserProfile;
+    const isAdmin = typedProfile.role === "admin";
+    if (!typedProfile.is_active && !isAdmin) return errorResponse("Your account is inactive. Please contact support.", 403);
+    if (!isAdmin && typedProfile.current_plan === "free_trial" && new Date(typedProfile.trial_ends_at) < new Date()) {
+      return errorResponse("Your free trial has ended. Upgrade your plan to continue using LeadScope AI.", 403);
+    }
+    if (!isAdmin && typedProfile.current_plan === "free_trial") {
+      const { count: previewCount, error: previewCountError } = await serviceClient
+        .from("website_previews")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      if (previewCountError) return errorResponse(`Failed to check website preview limit: ${previewCountError.message}`, 500);
+      if ((previewCount ?? 0) >= FREE_TRIAL_WEBSITE_PREVIEW_LIMIT) {
+        return errorResponse("You’ve reached your free trial limit of 5 website previews. Upgrade to continue.", 403);
+      }
+    }
 
     const { data: lead, error: leadError } = await serviceClient.from("leads").select("id, user_id, business_name, industry, location, website").eq("id", lead_id).maybeSingle();
     if (leadError || !lead) return errorResponse("Lead not found", 404);
     const typedLead = lead as Lead;
-    if ((profile as UserProfile).role !== "admin" && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
+    if (!isAdmin && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
     const { data: previousPreviewRows } = await serviceClient.from("website_previews").select("preview_data, created_at").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(5);
     const { data: audit } = await serviceClient.from("lead_audits").select("summary, main_issues, recommended_offer, seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
