@@ -11,6 +11,7 @@ export interface PlanConfig {
   leadsLimit: number; // -1 = unlimited
   auditsLimit: number;
   messagesLimit: number;
+  websitePreviewsLimit: number;
   usersLimit: number;
   csvExport: boolean;
   bulkActions: boolean;
@@ -53,6 +54,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: 100,
     auditsLimit: 25,
     messagesLimit: 25,
+    websitePreviewsLimit: 5,
     usersLimit: 1,
     csvExport: false,
     bulkActions: false,
@@ -72,6 +74,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: 500,
     auditsLimit: 100,
     messagesLimit: 100,
+    websitePreviewsLimit: 25,
     usersLimit: 1,
     csvExport: true,
     bulkActions: false,
@@ -91,6 +94,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: 2500,
     auditsLimit: 500,
     messagesLimit: 500,
+    websitePreviewsLimit: 150,
     usersLimit: 3,
     csvExport: true,
     bulkActions: true,
@@ -111,6 +115,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: 10000,
     auditsLimit: 2000,
     messagesLimit: 2000,
+    websitePreviewsLimit: 500,
     usersLimit: 10,
     csvExport: true,
     bulkActions: true,
@@ -130,6 +135,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: -1,
     auditsLimit: -1,
     messagesLimit: -1,
+    websitePreviewsLimit: -1,
     usersLimit: -1,
     csvExport: true,
     bulkActions: true,
@@ -149,6 +155,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     leadsLimit: -1,
     auditsLimit: -1,
     messagesLimit: -1,
+    websitePreviewsLimit: -1,
     usersLimit: -1,
     csvExport: true,
     bulkActions: true,

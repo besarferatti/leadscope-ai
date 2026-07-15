@@ -30,6 +30,7 @@ export function AdminPlans() {
                   ['Leads/mo', plan.leadsLimit === -1 ? 'Unlimited' : plan.leadsLimit.toLocaleString()],
                   ['Audits/mo', plan.auditsLimit === -1 ? 'Unlimited' : plan.auditsLimit.toLocaleString()],
                   ['Messages/mo', plan.messagesLimit === -1 ? 'Unlimited' : plan.messagesLimit.toLocaleString()],
+                  ['Website previews/mo', plan.websitePreviewsLimit === -1 ? 'Unlimited' : plan.websitePreviewsLimit.toLocaleString()],
                   ['Users', plan.usersLimit === -1 ? 'Unlimited' : plan.usersLimit],
                 ].map(([label, val]) => (
                   <div key={label as string} className="flex justify-between">
@@ -50,6 +51,11 @@ export function AdminPlans() {
                   ['Priority Support', plan.prioritySupport],
                   ['API Access', plan.apiAccess],
                   ['White Label', plan.whiteLabel],
+                  ['Public Share Links', true],
+                  ['Multilingual Links', true],
+                  ['Website Previews', true],
+                  ['Saved Leads', true],
+                  ['Website Status Targeting', true],
                 ].map(([label, enabled]) => (
                   <div key={label as string} className="flex items-center gap-1.5">
                     {enabled
