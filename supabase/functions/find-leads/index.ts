@@ -18,6 +18,40 @@ function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
 
+function normalizeKey(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function normalizePhone(value?: string | null) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+function getGoogleCategory(place: { primaryTypeDisplayName?: { text?: string } | string }) {
+  return typeof place.primaryTypeDisplayName === "string"
+    ? place.primaryTypeDisplayName.trim()
+    : place.primaryTypeDisplayName?.text?.trim() || "";
+}
+
+function isBroadFallbackIndustry(industry?: string | null) {
+  const normalized = normalizeKey(industry);
+  return !normalized
+    || normalized === "unknown"
+    || normalized === "construction"
+    || normalized === "services"
+    || normalized === "local services"
+    || normalized === "professional services"
+    || normalized === "construction services"
+    || normalized === "hvac services"
+    || normalized.endsWith(" services");
+}
+
+function isMoreSpecificGoogleCategory(googleCategory: string, existingIndustry?: string | null) {
+  const normalizedCategory = normalizeKey(googleCategory);
+  return Boolean(normalizedCategory)
+    && normalizedCategory !== normalizeKey(existingIndustry)
+    && isBroadFallbackIndustry(existingIndustry);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -180,66 +214,111 @@ Deno.serve(async (req: Request) => {
     // Fetch existing leads for this user to check duplicates
     const { data: existingLeads } = await supabase
       .from("leads")
-      .select("business_name, address, website")
+      .select("id, business_name, industry, address, website, phone, google_maps_url")
       .eq("user_id", user.id);
 
-    const existingWebsites = new Set(
-      (existingLeads ?? [])
-        .map((l: { website?: string }) => l.website?.trim().toLowerCase())
-        .filter(Boolean)
+    type ExistingLead = {
+      id: string;
+      business_name?: string;
+      industry?: string;
+      address?: string;
+      website?: string;
+      phone?: string;
+      google_maps_url?: string;
+    };
+
+    const existingLeadsList = (existingLeads ?? []) as ExistingLead[];
+
+    const existingByWebsite = new Map(
+      existingLeadsList
+        .map((l) => [normalizeKey(l.website), l] as const)
+        .filter(([website]) => Boolean(website))
     );
 
-    const existingNameAddress = new Set(
-      (existingLeads ?? [])
-        .map((l: { business_name?: string; address?: string }) =>
-          `${l.business_name?.toLowerCase()}_${l.address?.toLowerCase()}`
-        )
+    const existingByGoogleMapsUrl = new Map(
+      existingLeadsList
+        .map((l) => [normalizeKey(l.google_maps_url), l] as const)
+        .filter(([googleMapsUrl]) => Boolean(googleMapsUrl))
+    );
+
+    const existingByNamePhone = new Map(
+      existingLeadsList
+        .map((l) => [`${normalizeKey(l.business_name)}_${normalizePhone(l.phone)}`, l] as const)
+        .filter(([namePhone]) => !namePhone.endsWith("_"))
+    );
+
+    const existingByNameAddress = new Map(
+      existingLeadsList
+        .map((l) => [`${normalizeKey(l.business_name)}_${normalizeKey(l.address)}`, l] as const)
+        .filter(([nameAddress]) => !nameAddress.endsWith("_"))
     );
 
     const toInsert = [];
+    let inserted = 0;
+    let updated = 0;
     let skipped = 0;
 
     for (const place of detailedResults) {
-      const website = ((place as { website?: string }).website ?? "").trim().toLowerCase();
+      const leadWebsite = ((place as { website?: string }).website ?? "").trim();
+      const website = normalizeKey(leadWebsite);
       const address = (place.formatted_address ?? "").trim();
-      const nameAddr = `${place.name.toLowerCase()}_${address.toLowerCase()}`;
-
-      // Duplicate check: by website OR name+address
-      if (website && existingWebsites.has(website)) { skipped++; continue; }
-      if (existingNameAddress.has(nameAddr)) { skipped++; continue; }
+      const mapsUrl = place.place_id
+        ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+        : "";
+      const phone = (place as { international_phone_number?: string; formatted_phone_number?: string })
+        .international_phone_number
+        ?? (place as { formatted_phone_number?: string }).formatted_phone_number
+        ?? "";
+      const namePhone = `${normalizeKey(place.name)}_${normalizePhone(phone)}`;
+      const nameAddr = `${normalizeKey(place.name)}_${normalizeKey(address)}`;
 
       const types = place.types ?? [];
       const googlePrimaryType = (place as { primaryType?: string }).primaryType;
       const googlePrimaryTypeDisplayName = (place as { primaryTypeDisplayName?: { text?: string } | string })
         .primaryTypeDisplayName;
-      const leadWebsite = ((place as { website?: string }).website ?? "").trim();
-      const googleCategory = typeof googlePrimaryTypeDisplayName === "string"
-        ? googlePrimaryTypeDisplayName.trim()
-        : googlePrimaryTypeDisplayName?.text?.trim() || "";
+      const googleCategory = getGoogleCategory({ primaryTypeDisplayName: googlePrimaryTypeDisplayName });
       const industry = googleCategory
         || niche
         || googlePrimaryType
         || types[0]
         || "Unknown";
 
-      console.log("Saving lead category", {
+      const existingLead = (mapsUrl && existingByGoogleMapsUrl.get(normalizeKey(mapsUrl)))
+        || (website && existingByWebsite.get(website))
+        || (!namePhone.endsWith("_") && existingByNamePhone.get(namePhone))
+        || (!nameAddr.endsWith("_") && existingByNameAddress.get(nameAddr));
+      const existingIndustry = existingLead?.industry;
+
+      console.log("Lead industry save/update", {
         businessName: place.name,
         selectedNiche: niche,
         googlePrimaryType,
         googlePrimaryTypeDisplayName,
         googleTypes: types,
-        savedIndustry: industry,
+        existingIndustry,
+        newIndustry: industry,
+        action: existingLead ? "update-existing" : "insert-new",
       });
 
-      // Build Google Maps URL from place_id
-      const mapsUrl = place.place_id
-        ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
-        : "";
+      if (existingLead) {
+        if (isMoreSpecificGoogleCategory(googleCategory, existingIndustry)) {
+          const { error: updateError } = await supabase
+            .from("leads")
+            .update({ industry })
+            .eq("id", existingLead.id)
+            .eq("user_id", user.id);
 
-      const phone = (place as { international_phone_number?: string; formatted_phone_number?: string })
-        .international_phone_number
-        ?? (place as { formatted_phone_number?: string }).formatted_phone_number
-        ?? "";
+          if (updateError) {
+            return errorResponse(`Failed to update lead industry: ${updateError.message}`, 500);
+          }
+
+          existingLead.industry = industry;
+          updated++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
 
       toInsert.push({
         user_id: user.id,
@@ -258,12 +337,22 @@ Deno.serve(async (req: Request) => {
         status: "New",
       });
 
-      // Track to avoid duplicate within this batch
-      if (leadWebsite) existingWebsites.add(leadWebsite.toLowerCase());
-      existingNameAddress.add(nameAddr);
+      const pendingLead = {
+        id: "",
+        business_name: place.name,
+        industry,
+        address,
+        website: leadWebsite,
+        phone,
+        google_maps_url: mapsUrl,
+      };
+
+      if (website) existingByWebsite.set(website, pendingLead);
+      if (mapsUrl) existingByGoogleMapsUrl.set(normalizeKey(mapsUrl), pendingLead);
+      if (!namePhone.endsWith("_")) existingByNamePhone.set(namePhone, pendingLead);
+      if (!nameAddr.endsWith("_")) existingByNameAddress.set(nameAddr, pendingLead);
     }
 
-    let inserted = 0;
     if (toInsert.length > 0) {
       const { error: insertError } = await supabase.from("leads").insert(toInsert);
       if (insertError) {
@@ -279,7 +368,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", search_id)
       .eq("user_id", user.id);
 
-    return jsonResponse({ inserted, skipped });
+    return jsonResponse({ inserted, updated, skipped });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Something went wrong while searching.";
     return errorResponse(message, 500);
