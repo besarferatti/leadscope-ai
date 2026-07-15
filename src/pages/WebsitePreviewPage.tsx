@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, CalendarCheck, CheckCircle2, Clock, Loader2, MapPin, Menu, Quote, ShieldCheck, Sparkles, Star } from 'lucide-react';
+import { ArrowRight, Building2, CalendarCheck, Car, ChefHat, CheckCircle2, Clock, Coffee, Gem, Gauge, Hammer, HardHat, HeartPulse, Loader2, MapPin, Menu, Phone, Quote, Scissors, ShieldCheck, Sparkles, Star, Stethoscope, Utensils, Wrench, Briefcase } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { WebsitePreviewData } from '../types';
 
@@ -34,9 +34,90 @@ const fallbackVisualTheme = (preview: WebsitePreviewData) => ({
     { title: 'Trusted Local Team', description: 'Warm visual blocks for people, spaces, and service moments.' },
     { title: 'Quality in Detail', description: 'Premium placeholders that highlight care, process, and results.' },
   ],
+  image_sections: [
+    { title: 'Welcoming Experience', description: 'A polished first impression that helps visitors picture becoming a customer.', image_alt: 'Welcoming business experience visual block', visual_type: 'hero' as const },
+    { title: 'Trusted Local Team', description: 'Warm visual blocks for people, spaces, and service moments.', image_alt: 'Trusted local team visual block', visual_type: 'gallery' as const },
+    { title: 'Quality in Detail', description: 'Premium placeholders that highlight care, process, and results.', image_alt: 'Quality service detail visual block', visual_type: 'service' as const },
+  ],
 });
 
 type VisualTheme = NonNullable<WebsitePreviewData['visual_theme']>;
+type PreviewIcon = typeof Sparkles;
+
+function getIndustryKey(preview: Pick<WebsitePreviewData, 'industry' | 'visual_theme'>) {
+  const value = `${preview.visual_theme?.layout_variant || ''} ${preview.industry || ''}`.toLowerCase();
+  if (/medical|dental|dentist|clinic|health/.test(value)) return 'medical';
+  if (/construction|contractor|remodel|builder|roof|plumb|electric/.test(value)) return 'construction';
+  if (/restaurant|cafe|coffee|food|bar|bistro|chef|dining/.test(value)) return 'restaurant';
+  if (/beauty|salon|spa|hair|barber|nail|cosmetic/.test(value)) return 'beauty';
+  if (/auto|mechanic|vehicle|car|repair|garage|tire/.test(value)) return 'auto';
+  return 'professional';
+}
+
+function getIndustryIcon(preview: WebsitePreviewData): PreviewIcon {
+  const key = getIndustryKey(preview);
+  if (key === 'medical') return /dental|dentist/i.test(preview.industry || '') ? Stethoscope : HeartPulse;
+  if (key === 'construction') return /builder|building|contractor/i.test(preview.industry || '') ? Building2 : HardHat;
+  if (key === 'restaurant') return /coffee|cafe/i.test(preview.industry || '') ? Coffee : ChefHat;
+  if (key === 'beauty') return /hair|barber/i.test(preview.industry || '') ? Scissors : Gem;
+  if (key === 'auto') return /diagnostic|performance/i.test(preview.industry || '') ? Gauge : Car;
+  return Briefcase;
+}
+
+function getServiceIcon(preview: WebsitePreviewData, serviceTitle = ''): PreviewIcon {
+  const title = serviceTitle.toLowerCase();
+  if (/emergency|call|contact|reservation|book|appoint/.test(title)) return Phone;
+  if (/cosmetic|beauty|polish|detail|shine|premium/.test(title)) return Sparkles;
+  if (/protect|safe|trust|prevent|general|care/.test(title)) return ShieldCheck;
+  if (/renovat|build|plan|project|design/.test(title)) return /plan|project|design/.test(title) ? Building2 : Hammer;
+  if (/repair|fix|brake|maintenance|service/.test(title)) return Wrench;
+  if (/menu|food|dish|dining/.test(title)) return Utensils;
+  if (/event|review|featured|signature/.test(title)) return Star;
+  if (/hair|cut|style/.test(title)) return Scissors;
+  if (/bridal|luxury|jewel/.test(title)) return Gem;
+  if (/diagnostic|engine|inspection|gauge/.test(title)) return Gauge;
+  return getIndustryIcon(preview);
+}
+
+function getVisualGradient(visualTheme: VisualTheme) {
+  const key = visualTheme.layout_variant || visualTheme.color_theme || 'professional';
+  if (/medical/.test(key)) return 'from-cyan-200 via-blue-100 to-white';
+  if (/construction/.test(key)) return 'from-slate-950 via-stone-800 to-amber-500';
+  if (/restaurant/.test(key)) return 'from-amber-200 via-orange-100 to-rose-100';
+  if (/beauty/.test(key)) return 'from-rose-200 via-pink-100 to-amber-50';
+  if (/auto/.test(key)) return 'from-slate-900 via-blue-900 to-cyan-600';
+  return getVisualBlockStyle(visualTheme);
+}
+
+function getImageCardStyle(visualTheme: VisualTheme) {
+  const key = visualTheme.layout_variant || visualTheme.color_theme || 'professional';
+  if (/construction|auto/.test(key)) return 'border-white/10 bg-slate-950 text-white shadow-slate-950/25';
+  if (/restaurant/.test(key)) return 'border-amber-200 bg-amber-50 text-stone-950 shadow-amber-900/10';
+  if (/beauty/.test(key)) return 'border-rose-100 bg-rose-50 text-slate-950 shadow-rose-900/10';
+  if (/medical/.test(key)) return 'border-blue-100 bg-white text-slate-950 shadow-blue-900/10';
+  return 'border-slate-200 bg-white text-slate-950 shadow-slate-900/10';
+}
+
+function getGalleryIcon(visualTheme: VisualTheme): PreviewIcon {
+  const key = visualTheme.layout_variant || visualTheme.color_theme || 'professional';
+  if (/medical/.test(key)) return HeartPulse;
+  if (/construction/.test(key)) return HardHat;
+  if (/restaurant/.test(key)) return Utensils;
+  if (/beauty/.test(key)) return Sparkles;
+  if (/auto/.test(key)) return Gauge;
+  return Star;
+}
+
+function isValidImageUrl(url?: string) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 
 function getThemeClasses(visualTheme: VisualTheme) {
   const theme = visualTheme.color_theme || visualTheme.layout_variant || 'professional';
@@ -109,7 +190,7 @@ export function WebsitePreviewPage({ token }: Props) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6"><div className="max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-6 text-center"><h1 className="text-xl font-semibold text-white mb-2">Page unavailable</h1><p className="text-slate-400 text-sm">{error || 'This page could not be loaded.'}</p></div></div>;
   }
 
-  const visualTheme = preview.visual_theme || fallbackVisualTheme(preview);
+  const visualTheme = (preview.visual_theme || fallbackVisualTheme(preview)) as VisualTheme;
   const services = preview.services?.length ? preview.services : [
     { title: 'Professional Services', description: `Reliable support for customers in ${preview.location || 'the local area'}.` },
     { title: 'Personalized Support', description: 'Helpful guidance and clear next steps from the first conversation.' },
@@ -120,12 +201,17 @@ export function WebsitePreviewPage({ token }: Props) {
     'Experienced local team',
     'Quality-focused service from start to finish',
   ];
-  const galleryCards = visualTheme.gallery_cards?.length ? visualTheme.gallery_cards : fallbackVisualTheme(preview).gallery_cards;
+  const galleryCards = visualTheme.gallery_cards?.length ? visualTheme.gallery_cards : fallbackVisualTheme(preview).gallery_cards as VisualTheme['gallery_cards'];
   const themeClasses = getThemeClasses(visualTheme);
   const cardClasses = getCardClasses(visualTheme);
   const sectionOrder = getSectionOrder(visualTheme);
   const sectionRank = (name: string) => sectionOrder.indexOf(name);
   const visualBlockStyle = getVisualBlockStyle(visualTheme);
+  const visualGradient = getVisualGradient(visualTheme);
+  const imageCardStyle = getImageCardStyle(visualTheme);
+  const IndustryIcon = getIndustryIcon(preview);
+  const GalleryIcon = getGalleryIcon(visualTheme);
+  const imageSections: NonNullable<VisualTheme['image_sections']> = visualTheme.image_sections?.length ? visualTheme.image_sections : galleryCards.map((card, index) => ({ ...card, image_alt: card.image_alt || card.title, visual_type: index === 0 ? 'hero' : 'gallery' }));
 
   return (
     <main className={`flex min-h-screen flex-col ${themeClasses.page}`}>
@@ -159,21 +245,36 @@ export function WebsitePreviewPage({ token }: Props) {
             </div>
           </div>
 
-          <div className={`rounded-[2.25rem] border p-4 shadow-2xl shadow-slate-900/10 backdrop-blur ${themeClasses.panel}`}>
-            <div className="overflow-hidden rounded-[1.75rem] bg-slate-950 text-white">
-              <div className="relative min-h-80 p-7">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_16rem),radial-gradient(circle_at_75%_80%,rgba(96,165,250,0.35),transparent_18rem)]" />
-                <div className="relative flex h-full min-h-72 flex-col justify-between">
-                  <div>
-                    <p className="inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white/75">Signature atmosphere</p>
-                    <h2 className="mt-5 text-3xl font-black tracking-tight">{visualTheme.hero_visual_title}</h2>
-                    <p className="mt-4 max-w-md leading-7 text-slate-300">{visualTheme.hero_visual_description}</p>
+          <div className={`relative rounded-[2.25rem] border p-4 shadow-2xl shadow-slate-900/10 backdrop-blur ${themeClasses.panel}`}>
+            <div className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${visualGradient} text-white`}>
+              {isValidImageUrl(visualTheme.image_sections?.[0]?.image_url) && (
+                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${visualTheme.image_sections?.[0]?.image_url})` }} />
+              )}
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.42),transparent_13rem),radial-gradient(circle_at_78%_72%,rgba(255,255,255,0.22),transparent_16rem)]" />
+              <div className="absolute -right-14 -top-14 h-44 w-44 rounded-full border border-white/30 bg-white/10" />
+              <div className="absolute bottom-8 right-8 h-24 w-24 rounded-[2rem] border border-white/20 bg-white/10 rotate-6" />
+              <div className="relative min-h-[28rem] p-7 sm:p-9">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="rounded-[1.5rem] border border-white/20 bg-white/20 p-4 shadow-2xl backdrop-blur">
+                    <IndustryIcon className="h-10 w-10" />
                   </div>
-                  <div className="mt-8 grid grid-cols-3 gap-3">
-                    {(visualTheme.image_keywords || []).slice(0, 3).map((keyword) => (
-                      <div key={keyword} className="rounded-2xl border border-white/10 bg-white/10 p-3 text-xs font-bold text-white/80">{keyword}</div>
-                    ))}
-                  </div>
+                  <div className="rounded-2xl border border-white/20 bg-white/20 px-4 py-3 text-right text-xs font-black uppercase tracking-[0.2em] backdrop-blur">Premium visual</div>
+                </div>
+                <div className="mt-20 max-w-lg">
+                  <p className="inline-flex rounded-full bg-black/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white/85 backdrop-blur">{visualTheme.industry_style || 'Signature atmosphere'}</p>
+                  <h2 className="mt-5 text-4xl font-black tracking-tight sm:text-5xl">{visualTheme.hero_visual_title}</h2>
+                  <p className="mt-4 leading-7 text-white/85">{visualTheme.hero_visual_description}</p>
+                </div>
+                <div className="mt-9 grid gap-3 sm:grid-cols-3">
+                  {(visualTheme.image_keywords || [preview.industry, preview.location].filter(Boolean)).slice(0, 3).map((keyword) => (
+                    <div key={keyword} className="rounded-2xl border border-white/20 bg-white/20 p-4 text-sm font-bold text-white backdrop-blur">{keyword}</div>
+                  ))}
+                </div>
+                <div className="absolute bottom-5 left-5 hidden rounded-2xl border border-white/20 bg-white/90 p-4 text-slate-950 shadow-2xl sm:block">
+                  <div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5" /><span className="text-sm font-black">Trusted local experience</span></div>
+                </div>
+                <div className="absolute right-5 top-28 hidden rounded-2xl border border-white/20 bg-slate-950/60 p-4 shadow-2xl backdrop-blur sm:block">
+                  <div className="flex items-center gap-3"><Star className="h-5 w-5 fill-white" /><span className="text-sm font-black">Customer-ready design</span></div>
                 </div>
               </div>
             </div>
@@ -190,13 +291,17 @@ export function WebsitePreviewPage({ token }: Props) {
           <p className="max-w-md leading-7 text-slate-600">Clear service options, polished presentation, and a smooth path from interest to action.</p>
         </div>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {services.slice(0, 4).map((service, index) => (
-            <article key={service.title} className={`group ${cardClasses}`}>
-              <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white">0{index + 1}</div>
-              <h3 className="text-xl font-black tracking-tight">{service.title}</h3>
-              <p className="mt-4 text-sm leading-7 text-slate-600">{service.description}</p>
-            </article>
-          ))}
+          {services.slice(0, 4).map((service, index) => {
+            const ServiceIcon = getServiceIcon(preview, service.title);
+            return (
+              <article key={service.title} className={`group ${cardClasses}`}>
+                <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-950/15"><ServiceIcon className="h-6 w-6" /></div>
+                <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Service 0{index + 1}</p>
+                <h3 className="text-xl font-black tracking-tight">{service.title}</h3>
+                <p className="mt-4 text-sm leading-7 text-slate-600">{service.description}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -211,14 +316,21 @@ export function WebsitePreviewPage({ token }: Props) {
               <div className="rounded-3xl bg-white p-5 shadow-sm"><Clock className="h-6 w-6 text-slate-950" /><p className="mt-3 text-sm font-bold">Responsive service</p></div>
             </div>
           </div>
-          <div className="grid gap-5 sm:grid-cols-3">
-            {galleryCards.slice(0, 3).map((card) => (
-              <div key={card.title} className="min-h-72 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className={`h-28 rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} />
-                <h3 className="mt-5 text-lg font-black">{card.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
-              </div>
-            ))}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {imageSections.slice(0, 4).map((card, index) => {
+              const cardImageUrl = 'image_url' in card && isValidImageUrl(card.image_url) ? card.image_url : undefined;
+              return (
+                <div key={`${card.title}-${index}`} aria-label={card.image_alt || card.title} className={`min-h-80 rounded-[2rem] border p-5 shadow-xl ${imageCardStyle}`}>
+                  <div className={`relative h-36 overflow-hidden rounded-[1.4rem] bg-gradient-to-br ${visualBlockStyle}`} style={cardImageUrl ? { backgroundImage: `url(${cardImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.45),transparent_7rem)]" />
+                    <div className="absolute bottom-4 left-4 rounded-2xl bg-white/85 p-3 text-slate-950 shadow-lg backdrop-blur"><GalleryIcon className="h-6 w-6" /></div>
+                    <div className="absolute right-4 top-4 rounded-full bg-black/20 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-white backdrop-blur">{card.visual_type || 'gallery'}</div>
+                  </div>
+                  <h3 className="mt-5 text-lg font-black">{card.title}</h3>
+                  <p className="mt-3 text-sm leading-6 opacity-75">{card.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

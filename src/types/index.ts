@@ -168,6 +168,6 @@ export interface WebsitePreviewData {
     hero_visual_description: string;
     image_keywords: string[];
     gallery_cards: Array<{ title: string; description: string; image_prompt?: string; image_alt?: string }>;
-    image_sections?: Array<{ title: string; description: string; image_alt: string; visual_type: "hero" | "gallery" | "service" | "trust" | "cta" }>;
+    image_sections?: Array<{ title: string; description: string; image_alt: string; image_url?: string; visual_type: "hero" | "gallery" | "service" | "trust" | "cta" }>;
   };
 }
