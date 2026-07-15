@@ -130,6 +130,11 @@ export interface SharedAuditReport {
   shared_at: string | null;
 }
 
+export interface WebsitePreview {
+  preview_token: string;
+  created_at: string;
+}
+
 export interface WebsitePreviewData {
   business_name: string;
   industry: string;
