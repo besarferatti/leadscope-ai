@@ -17,17 +17,28 @@ interface Props {
 
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   free_trial: [
-    'Basic lead search',
-    'Manual lead add',
-    '50 leads / month',
+    '100 leads per month',
     '25 AI website audits',
     '25 AI outreach messages',
+    '5 AI website previews',
+    'AI website preview links',
+    'Public audit share links',
+    'Multilingual audit reports',
+    'Website status targeting',
+    'Saved Leads',
     'Basic dashboard',
   ],
   starter: [
     '500 leads per month',
     '100 AI website audits',
     '100 AI outreach messages',
+    '25 AI website previews',
+    'AI website preview links',
+    'Public audit share links',
+    'Multilingual audit reports',
+    'Website status targeting',
+    'Saved Leads',
+    'Client-ready audit reports',
     'Manual lead import',
     'Google Places search',
     'CSV export',
@@ -38,6 +49,15 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
     '2,500 leads per month',
     '500 AI website audits',
     '500 AI outreach messages',
+    '150 AI website previews',
+    'AI website preview links',
+    'Public audit share links',
+    'Multilingual audit reports',
+    'Website status targeting',
+    'Saved Leads',
+    'Dynamic preview layouts',
+    'Industry-based images',
+    'Client-ready audit reports',
     'Google Places lead search',
     'Advanced filters',
     'CSV export',
@@ -50,6 +70,16 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
     '10,000 leads per month',
     '2,000 AI website audits',
     '2,000 AI outreach messages',
+    '500 AI website previews',
+    'AI website preview links',
+    'Public audit share links',
+    'Multilingual audit reports',
+    'Website status targeting',
+    'Saved Leads',
+    'Dynamic preview layouts',
+    'Industry-based images',
+    'Client-ready audit reports',
+    'Best for lead-to-pitch workflows',
     '10 team members',
     'Multiple workspaces',
     'Advanced lead scoring',
@@ -59,13 +89,23 @@ const PLAN_FEATURES: Record<PlanId, string[]> = {
     'Priority support',
   ],
   enterprise: [
+    'Unlimited leads',
+    'Unlimited AI website audits',
+    'Unlimited AI outreach messages',
+    'Unlimited AI website previews',
+    'AI website preview links',
+    'Public audit share links',
+    'Multilingual audit reports',
+    'Website status targeting',
+    'Saved Leads',
+    'Dynamic preview layouts',
+    'Industry-based images',
+    'White-label client reports',
     'Custom monthly limits',
     'API access',
-    'White-label option',
     'Custom integrations',
     'Dedicated onboarding',
     'Dedicated support',
-    'Best for larger agencies',
   ],
   admin_unlimited: [],
 };
@@ -245,6 +285,10 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
                   <div className="flex justify-between text-slate-300">
                     <span>Messages/mo</span>
                     <span className="font-semibold">{plan.messagesLimit === -1 ? 'Unlimited' : plan.messagesLimit.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Website previews/mo</span>
+                    <span className="font-semibold">{plan.websitePreviewsLimit === -1 ? 'Unlimited' : plan.websitePreviewsLimit.toLocaleString()}</span>
                   </div>
                 </div>
 
