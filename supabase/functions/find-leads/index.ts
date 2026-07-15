@@ -32,6 +32,58 @@ function getGoogleCategory(place: { primaryTypeDisplayName?: { text?: string } |
     : place.primaryTypeDisplayName?.text?.trim() || "";
 }
 
+function normalizeCategory(value?: string | null) {
+  return normalizeKey(value).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isBroadGoogleCategory(category?: string | null) {
+  const normalized = normalizeCategory(category);
+  return normalized === "contractor"
+    || normalized === "general contractor"
+    || normalized === "construction"
+    || normalized === "construction company"
+    || normalized === "building contractor"
+    || normalized === "service establishment"
+    || normalized === "establishment"
+    || normalized === "point of interest"
+    || normalized === "local business"
+    || normalized === "services";
+}
+
+function categoryFromSelectedNiche(niche?: string | null) {
+  const normalized = normalizeCategory(niche);
+
+  if (/\b(hvac|heating|cooling|air conditioning|ac repair|ventilation)\b/.test(normalized)) {
+    return "HVAC contractor";
+  }
+  if (/\b(plumbing|plumber)\b/.test(normalized)) {
+    return "Plumber";
+  }
+  if (/\b(electrician|electrical)\b/.test(normalized)) {
+    return "Electrician";
+  }
+  if (/\b(roofing|roofer)\b/.test(normalized)) {
+    return "Roofing contractor";
+  }
+  if (/\b(construction|contractor|builder|renovation|remodel)\b/.test(normalized)) {
+    return "General Contractor";
+  }
+  if (/\b(dental|dentist)\b/.test(normalized)) {
+    return "Dental clinic";
+  }
+  if (/\brestaurant\b/.test(normalized)) {
+    return "Restaurant";
+  }
+  if (/\b(beauty|salon|hair|nails)\b/.test(normalized)) {
+    return "Beauty salon";
+  }
+  if (/\b(auto repair|mechanic|car repair)\b/.test(normalized)) {
+    return "Auto repair shop";
+  }
+
+  return "";
+}
+
 function isBroadFallbackIndustry(industry?: string | null) {
   const normalized = normalizeKey(industry);
   return !normalized
@@ -41,14 +93,15 @@ function isBroadFallbackIndustry(industry?: string | null) {
     || normalized === "local services"
     || normalized === "professional services"
     || normalized === "construction services"
-    || normalized === "hvac services"
-    || normalized.endsWith(" services");
+    || normalized === "general contractor"
+    || normalized === "contractor";
 }
 
-function isMoreSpecificGoogleCategory(googleCategory: string, existingIndustry?: string | null) {
-  const normalizedCategory = normalizeKey(googleCategory);
-  return Boolean(normalizedCategory)
-    && normalizedCategory !== normalizeKey(existingIndustry)
+function isMoreSpecificIndustry(industry: string, existingIndustry?: string | null) {
+  const normalizedIndustry = normalizeKey(industry);
+  return Boolean(normalizedIndustry)
+    && normalizedIndustry !== normalizeKey(existingIndustry)
+    && !isBroadFallbackIndustry(industry)
     && isBroadFallbackIndustry(existingIndustry);
 }
 
@@ -277,11 +330,14 @@ Deno.serve(async (req: Request) => {
       const googlePrimaryTypeDisplayName = (place as { primaryTypeDisplayName?: { text?: string } | string })
         .primaryTypeDisplayName;
       const googleCategory = getGoogleCategory({ primaryTypeDisplayName: googlePrimaryTypeDisplayName });
-      const industry = googleCategory
-        || niche
-        || googlePrimaryType
-        || types[0]
-        || "Unknown";
+      const nicheCategory = categoryFromSelectedNiche(niche);
+      const industry = googleCategory && !isBroadGoogleCategory(googleCategory)
+        ? googleCategory
+        : nicheCategory
+          || googleCategory
+          || googlePrimaryType
+          || types[0]
+          || "Unknown";
 
       const existingLead = (mapsUrl && existingByGoogleMapsUrl.get(normalizeKey(mapsUrl)))
         || (website && existingByWebsite.get(website))
@@ -289,19 +345,21 @@ Deno.serve(async (req: Request) => {
         || (!nameAddr.endsWith("_") && existingByNameAddress.get(nameAddr));
       const existingIndustry = existingLead?.industry;
 
-      console.log("Lead industry save/update", {
+      console.log("Lead industry decision", {
         businessName: place.name,
         selectedNiche: niche,
+        googleCategory,
+        nicheCategory,
         googlePrimaryType,
         googlePrimaryTypeDisplayName,
         googleTypes: types,
-        existingIndustry,
-        newIndustry: industry,
+        finalIndustry: industry,
+        isGoogleCategoryBroad: isBroadGoogleCategory(googleCategory),
         action: existingLead ? "update-existing" : "insert-new",
       });
 
       if (existingLead) {
-        if (isMoreSpecificGoogleCategory(googleCategory, existingIndustry)) {
+        if (isMoreSpecificIndustry(industry, existingIndustry)) {
           const { error: updateError } = await supabase
             .from("leads")
             .update({ industry })
