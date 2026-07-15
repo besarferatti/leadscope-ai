@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink,
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
-  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2,
+  BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2, Monitor,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +31,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [error, setError] = useState('');
   const [auditLoading, setAuditLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [msgLoading, setMsgLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
@@ -128,6 +129,33 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       setError((e as Error).message ?? 'Failed to generate message.');
     }
     setMsgLoading(false);
+  }
+
+
+  async function handleGenerateWebsitePreview() {
+    if (!lead) return;
+    setPreviewLoading(true);
+    setError('');
+
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('generate-website-preview', {
+        body: { lead_id: leadId },
+      });
+
+      if (functionError) throw new Error(functionError.message);
+      if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
+
+      const token = (data as { preview?: { preview_token?: string } } | null)?.preview?.preview_token;
+      if (!token) throw new Error('Website preview was created but no preview token was returned.');
+
+      const previewLink = `${window.location.origin}/preview/${token}`;
+      await copyText(previewLink, 'website-preview-link');
+      trackEvent('website_preview_generated', { lead_id: leadId });
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Failed to generate website preview.');
+    }
+
+    setPreviewLoading(false);
   }
 
 
@@ -322,6 +350,20 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {audit && (
                   <>
+
+                    <button
+                      onClick={handleGenerateWebsitePreview}
+                      disabled={previewLoading}
+                      className="btn-secondary text-xs py-2"
+                    >
+                      {previewLoading ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...</>
+                      ) : copied === 'website-preview-link' ? (
+                        <><Check className="w-3.5 h-3.5 text-emerald-400" /> Preview link copied</>
+                      ) : (
+                        <><Monitor className="w-3.5 h-3.5" /> Create Website Preview</>
+                      )}
+                    </button>
                     <button
                       onClick={() => handleShareAudit('en')}
                       disabled={shareLoading}

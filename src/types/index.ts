@@ -129,3 +129,24 @@ export interface SharedAuditReport {
   seo_content_pack?: PublicSeoContentPack | null;
   shared_at: string | null;
 }
+
+export interface WebsitePreviewData {
+  business_name: string;
+  industry: string;
+  location: string;
+  website: string;
+  meta_title: string;
+  hero_headline: string;
+  subheadline: string;
+  cta_text: string;
+  services: Array<{ title: string; description: string }>;
+  why_choose_us: string[];
+  about_intro: string;
+  contact: {
+    headline: string;
+    body: string;
+    website: string;
+    location: string;
+  };
+  local_seo_angle?: string;
+}

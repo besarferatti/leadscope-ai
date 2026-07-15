@@ -11,6 +11,7 @@ import { LeadSearchesPage } from './pages/LeadSearchesPage';
 import { LeadsPage } from './pages/LeadsPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
 import { SharedAuditReportPage } from './pages/SharedAuditReportPage';
+import { WebsitePreviewPage } from './pages/WebsitePreviewPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { AdminPage } from './pages/admin/AdminPage';
@@ -120,6 +121,7 @@ function AppInner() {
   );
   const [activatingPlan, setActivatingPlan] = useState(false);
   const shareMatch = window.location.pathname.match(/^\/audit\/share\/([^/]+)$/);
+  const previewMatch = window.location.pathname.match(/^\/preview\/([^/]+)$/);
 
   function getPagePath(p: AppPage, params: Record<string, string> = {}) {
     const query = new URLSearchParams(params).toString();
@@ -226,6 +228,10 @@ function AppInner() {
 
   if (shareMatch) {
     return <SharedAuditReportPage token={decodeURIComponent(shareMatch[1])} />;
+  }
+
+  if (previewMatch) {
+    return <WebsitePreviewPage token={decodeURIComponent(previewMatch[1])} />;
   }
 
   if (loading) {
