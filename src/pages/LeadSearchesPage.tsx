@@ -17,7 +17,7 @@ import {
   LANGUAGES,
   WEBSITE_STATUS_FILTER_OPTIONS,
 } from '../lib/utils';
-import { canGenerateLead, isAdmin, incrementUsage } from '../lib/plans';
+import { isAdmin, incrementUsage } from '../lib/plans';
 import { trackEvent } from '../lib/analytics';
 
 interface Props {
@@ -40,6 +40,7 @@ interface FindLeadsState {
     inserted: number;
     updated: number;
     skipped: number;
+    skipped_due_to_saved_lead_limit: number;
     filtered_out_by_website_status: number;
     pages_fetched: number;
     scanned: number;
@@ -89,6 +90,12 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       setError('Niche and location are required.');
       return;
     }
+
+    if (!isAdmin(profile) && profile?.current_plan === 'free_trial' && searches.length >= 30) {
+      setUpgradeMsg('You’ve reached your free trial limit of 30 lead searches. Upgrade to continue.');
+      return;
+    }
+
     setSaving(true);
     setError('');
     const { error: err } = await supabase.from('lead_searches').insert({
@@ -112,14 +119,6 @@ export function LeadSearchesPage({ onNavigate }: Props) {
   }
 
   async function handleFindLeads(search: LeadSearch) {
-    // Limit check
-    if (!isAdmin(profile)) {
-      const check = canGenerateLead(profile);
-      if (!check.allowed) {
-        setUpgradeMsg(check.message ?? '');
-        return;
-      }
-    }
 
     trackEvent('lead_search_started', { search_id: search.id });
     setFindState(prev => ({ ...prev, [search.id]: { loading: true, error: '', result: null } }));
@@ -151,6 +150,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
         inserted?: number;
         updated?: number;
         skipped?: number;
+        skipped_duplicates?: number;
+        skipped_due_to_saved_lead_limit?: number;
         filtered_out_by_website_status?: number;
         pages_fetched?: number;
         scanned?: number;
@@ -167,7 +168,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       }
 
       const inserted = json.inserted ?? 0;
-      const skipped = json.skipped ?? 0;
+      const skipped = json.skipped_duplicates ?? json.skipped ?? 0;
+      const skipped_due_to_saved_lead_limit = json.skipped_due_to_saved_lead_limit ?? 0;
       const updated = json.updated ?? 0;
       const filtered_out_by_website_status = json.filtered_out_by_website_status ?? 0;
       const pages_fetched = json.pages_fetched ?? 0;
@@ -199,6 +201,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
             inserted,
             updated,
             skipped,
+            skipped_due_to_saved_lead_limit,
             filtered_out_by_website_status,
             pages_fetched,
             scanned,
@@ -337,8 +340,8 @@ export function LeadSearchesPage({ onNavigate }: Props) {
                   <div className="flex items-center gap-2 p-3 mb-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                     <p className="text-emerald-300 text-xs">
                       {fs.result.inserted === 0
-                        ? `No leads saved · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}.`
-                        : `Saved ${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}. Redirecting…`}
+                        ? `No leads saved · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}${fs.result.skipped_due_to_saved_lead_limit > 0 ? ` · ${fs.result.skipped_due_to_saved_lead_limit} skipped due to saved lead limit` : ''}.`
+                        : `Saved ${fs.result.inserted} lead${fs.result.inserted !== 1 ? 's' : ''} · scanned ${fs.result.scanned} result${fs.result.scanned !== 1 ? 's' : ''} across ${fs.result.pages_fetched} page${fs.result.pages_fetched !== 1 ? 's' : ''}${fs.result.filtered_out_by_website_status > 0 ? ` · ${fs.result.filtered_out_by_website_status} filtered out` : ''}${fs.result.skipped > 0 ? ` · ${fs.result.skipped} duplicate${fs.result.skipped !== 1 ? 's' : ''} skipped` : ''}${fs.result.skipped_due_to_saved_lead_limit > 0 ? ` · ${fs.result.skipped_due_to_saved_lead_limit} skipped due to saved lead limit` : ''}. Redirecting…`}
                     </p>
                   </div>
                 )}

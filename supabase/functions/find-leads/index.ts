@@ -21,6 +21,10 @@ function errorResponse(message: string, status = 400) {
 
 type WebsiteStatus = "has_website" | "no_website" | "social_only";
 type WebsiteStatusFilter = "all" | WebsiteStatus;
+type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
+type UserProfile = { id: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; is_active: boolean };
+const FREE_TRIAL_LEAD_SEARCH_LIMIT = 30;
+const FREE_TRIAL_SAVED_LEAD_LIMIT = 100;
 
 type GooglePlace = {
   name: string;
@@ -210,6 +214,29 @@ Deno.serve(async (req: Request) => {
 
     if (!search_id || !niche || !location) {
       return errorResponse("search_id, niche, and location are required");
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("id, role, current_plan, trial_ends_at, is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profileError || !profile) return errorResponse("User profile not found", 404);
+    const typedProfile = profile as UserProfile;
+    const isAdmin = typedProfile.role === "admin";
+    if (!typedProfile.is_active && !isAdmin) return errorResponse("Your account is inactive. Please contact support.", 403);
+    if (!isAdmin && typedProfile.current_plan === "free_trial" && new Date(typedProfile.trial_ends_at) < new Date()) {
+      return errorResponse("Your free trial has ended. Upgrade your plan to continue using LeadScope AI.", 403);
+    }
+    if (!isAdmin && typedProfile.current_plan === "free_trial") {
+      const { count: searchCount, error: searchCountError } = await supabase
+        .from("lead_searches")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      if (searchCountError) return errorResponse(`Failed to check lead search limit: ${searchCountError.message}`, 500);
+      if ((searchCount ?? 0) > FREE_TRIAL_LEAD_SEARCH_LIMIT) {
+        return errorResponse("You’ve reached your free trial limit of 30 lead searches. Upgrade to continue.", 403);
+      }
     }
 
     const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
@@ -415,7 +442,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         inserted: 0,
         updated: 0,
-        skipped: 0,
+        skipped_duplicates: 0,
+        skipped_due_to_saved_lead_limit: 0,
         filtered_out_by_website_status: 0,
         pages_fetched,
         scanned,
@@ -469,7 +497,10 @@ Deno.serve(async (req: Request) => {
     const toInsert = [];
     let inserted = 0;
     let updated = 0;
-    let skipped = 0;
+    let skipped_duplicates = 0;
+    let skipped_due_to_saved_lead_limit = 0;
+    const savedLeadLimit = !isAdmin && typedProfile.current_plan === "free_trial" ? FREE_TRIAL_SAVED_LEAD_LIMIT : -1;
+    let remainingSavedLeadSlots = savedLeadLimit === -1 ? Number.POSITIVE_INFINITY : Math.max(0, savedLeadLimit - existingLeadsList.length);
     for (const place of detailedResults) {
       const leadWebsite = (place.website ?? "").trim();
       const website = normalizeKey(leadWebsite);
@@ -543,10 +574,16 @@ Deno.serve(async (req: Request) => {
           existingLead.industry = industry;
           updated++;
         } else {
-          skipped++;
+          skipped_duplicates++;
         }
         continue;
       }
+
+      if (remainingSavedLeadSlots <= 0) {
+        skipped_due_to_saved_lead_limit++;
+        continue;
+      }
+      remainingSavedLeadSlots--;
 
       toInsert.push({
         user_id: user.id,
@@ -599,7 +636,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({
       inserted,
       updated,
-      skipped,
+      skipped_duplicates,
+      skipped_due_to_saved_lead_limit,
       filtered_out_by_website_status,
       pages_fetched,
       scanned,

@@ -72,7 +72,7 @@ function enforceMessageLimit(profile: UserProfile): string | null {
   if (!profile.is_active) return "Your account is inactive. Please contact support.";
   if (profile.current_plan === "free_trial" && new Date(profile.trial_ends_at) < new Date()) return "Your free trial has ended. Upgrade your plan to continue using LeadScope AI.";
   const limit = messageLimits[profile.current_plan] ?? messageLimits.free_trial;
-  if (limit !== -1 && profile.messages_used_this_month >= limit) return "You've reached your monthly outreach message limit. Upgrade your plan to generate more personalized messages.";
+  if (limit !== -1 && profile.messages_used_this_month >= limit) return profile.current_plan === "free_trial" ? "You’ve reached your free trial limit of 25 outreach messages. Upgrade to continue." : "You've reached your monthly outreach message limit. Upgrade your plan to generate more personalized messages.";
   return null;
 }
 
