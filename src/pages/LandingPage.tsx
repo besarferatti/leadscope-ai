@@ -2,13 +2,28 @@ import {
   Crosshair, Search, MessageSquare, Download, BarChart3,
   ArrowRight, CheckCircle, Zap, Target, Globe,
 } from 'lucide-react';
+import { SEO } from '../components/SEO';
 
 interface Props {
   onGetStarted: () => void;
   onLogin: () => void;
   onPricing?: () => void;
   onAffiliate?: () => void;
+  onFAQ?: () => void;
 }
+
+const softwareApplicationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'LeadScope AI',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  description: 'AI-powered lead generation and audit platform for agencies and freelancers.',
+  offers: ['Free Trial', 'Starter', 'Pro', 'Agency', 'Enterprise'].map(name => ({
+    '@type': 'Offer',
+    name,
+  })),
+};
 
 const features = [
   {
@@ -49,9 +64,10 @@ const stats = [
   { value: '3 min', label: 'From search to pitch' },
 ];
 
-export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate }: Props) {
+export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onFAQ }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
+      <SEO structuredData={softwareApplicationSchema} />
       {/* Nav */}
       <header className="border-b border-slate-800/60 sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -65,6 +81,11 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate }: P
             {onPricing && (
               <button onClick={onPricing} className="text-slate-400 hover:text-slate-200 text-sm transition-colors">
                 Pricing
+              </button>
+            )}
+            {onFAQ && (
+              <button onClick={onFAQ} className="text-slate-400 hover:text-slate-200 text-sm transition-colors hidden sm:inline">
+                FAQ
               </button>
             )}
             {onAffiliate && (
@@ -209,6 +230,9 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate }: P
             <span className="text-slate-400 text-sm font-medium">LeadScope AI</span>
           </div>
           <div className="flex items-center gap-4">
+            {onFAQ && (
+              <button onClick={onFAQ} className="text-slate-500 hover:text-blue-400 text-sm transition-colors">FAQ</button>
+            )}
             {onAffiliate && (
               <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400 text-sm transition-colors">Affiliate Program</button>
             )}

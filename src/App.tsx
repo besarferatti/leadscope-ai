@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
 import { PricingPage } from './pages/PricingPage';
+import { FAQPage } from './pages/FAQPage';
 import { AffiliatePage } from './pages/AffiliatePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -16,6 +17,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { AdminPage } from './pages/admin/AdminPage';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import { SEO } from './components/SEO';
 import { createCheckoutSession } from './lib/stripe';
 import { initAnalytics, trackEvent, trackPageView } from './lib/analytics';
 import { supabase } from './lib/supabase';
@@ -27,6 +29,7 @@ type AppPage =
   | 'login'
   | 'register'
   | 'pricing'
+  | 'faq'
   | 'affiliate'
   | 'change-password'
   | 'dashboard'
@@ -36,7 +39,7 @@ type AppPage =
   | 'settings'
   | 'admin';
 
-const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'affiliate'];
+const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'affiliate'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'settings', 'change-password'];
 
@@ -64,7 +67,7 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <><SEO noindex canonicalPath={window.location.pathname} /><div className="min-h-screen bg-slate-950 flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
@@ -106,13 +109,26 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
           onSelectPlan={handleSelectPlan}
         />
       </div>
-    </div>
+    </div></>
   );
 }
 
 function AppInner() {
   const { session, loading, profile, profileLoading, profileError, refreshProfile } = useAuth();
-  const [page, setPage] = useState<AppPage>('dashboard');
+  const [page, setPage] = useState<AppPage>(() => {
+    switch (window.location.pathname) {
+      case '/': return 'landing';
+      case '/pricing': return 'pricing';
+      case '/faq': return 'faq';
+      case '/login': return 'login';
+      case '/dashboard': return 'dashboard';
+      case '/lead-searches': return 'searches';
+      case '/leads': return 'leads';
+      case '/settings': return 'settings';
+      case '/admin': return 'admin';
+      default: return 'landing';
+    }
+  });
   const [pageParams, setPageParams] = useState<Record<string, string>>({});
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [checkoutBanner, setCheckoutBanner] = useState<'success' | 'cancel' | null>(null);
@@ -131,6 +147,10 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
+    const publicPath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : null;
+    if (publicPath && window.location.pathname !== publicPath) {
+      window.history.pushState({}, '', publicPath);
+    }
     window.scrollTo(0, 0);
   }
 
@@ -227,11 +247,11 @@ function AppInner() {
   }, [activatingPlan, session?.user?.id]);
 
   if (shareMatch) {
-    return <SharedAuditReportPage token={decodeURIComponent(shareMatch[1])} />;
+    return <><SEO noindex canonicalPath={window.location.pathname} /><SharedAuditReportPage token={decodeURIComponent(shareMatch[1])} /></>;
   }
 
   if (previewMatch) {
-    return <WebsitePreviewPage token={decodeURIComponent(previewMatch[1])} />;
+    return <><SEO noindex canonicalPath={window.location.pathname} /><WebsitePreviewPage token={decodeURIComponent(previewMatch[1])} /></>;
   }
 
   if (loading) {
@@ -262,6 +282,16 @@ function AppInner() {
     );
   }
 
+  if (page === 'faq') {
+    return (
+      <FAQPage
+        onBack={() => navigate('landing')}
+        onGetStarted={() => { setAuthMode('register'); navigate('register'); }}
+        onLogin={() => { setAuthMode('login'); navigate('login'); }}
+      />
+    );
+  }
+
   // Public pricing page — accessible without auth
   if (page === 'pricing') {
     return (
@@ -277,12 +307,12 @@ function AppInner() {
   if (!session) {
     if (page === 'login' || page === 'register') {
       return (
-        <AuthPage
+        <><SEO noindex canonicalPath="/login" /><AuthPage
           mode={authMode}
           onModeChange={m => setAuthMode(m)}
           onBack={() => navigate('landing')}
           onSuccess={() => navigate('dashboard')}
-        />
+        /></>
       );
     }
     return (
@@ -291,6 +321,7 @@ function AppInner() {
         onLogin={() => { setAuthMode('login'); navigate('login'); }}
         onPricing={() => navigate('pricing')}
         onAffiliate={() => navigate('affiliate')}
+        onFAQ={() => navigate('faq')}
       />
     );
   }
@@ -345,10 +376,10 @@ function AppInner() {
     }
 
     if (profile?.role === 'admin') {
-      return <AdminPage onNavigate={navigate} adminPage={pageParams.admin_page ?? 'overview'} />;
+      return <><SEO noindex canonicalPath="/admin" /><AdminPage onNavigate={navigate} adminPage={pageParams.admin_page ?? 'overview'} /></>;
     }
 
-    return <DashboardPage onNavigate={navigate} />;
+    return <><SEO noindex canonicalPath="/admin" /><DashboardPage onNavigate={navigate} /></>;
   }
 
   // Show plan picker for free trial users (once per session, not for admins)
@@ -384,7 +415,7 @@ function AppInner() {
 
 
   return (
-    <DashboardLayout currentPage={activePage} onNavigate={navigate}>
+    <><SEO noindex canonicalPath={window.location.pathname} /><DashboardLayout currentPage={activePage} onNavigate={navigate}>
       {checkoutBanner === 'success' && (
         <div className="flex items-center justify-between gap-3 p-4 mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
           <div className="flex items-center gap-3">
@@ -408,7 +439,7 @@ function AppInner() {
         </div>
       )}
       {renderContent()}
-    </DashboardLayout>
+    </DashboardLayout></>
   );
 }
 

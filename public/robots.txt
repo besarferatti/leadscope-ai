@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /lead-searches
+Disallow: /leads
+Disallow: /settings
+Disallow: /admin
+Disallow: /account
+Disallow: /login
+Disallow: /audit/share/
+Disallow: /preview/
+
+Sitemap: https://www.leadscope.pro/sitemap.xml
