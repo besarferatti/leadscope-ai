@@ -31,6 +31,8 @@ type SafeSmtpSettings = {
 };
 
 type ExistingSmtpSettings = {
+  id: string;
+  user_id: string;
   smtp_password_encrypted: string | null;
 };
 
@@ -80,13 +82,15 @@ Deno.serve(async (req: Request) => {
     if (!encryptionKey) return errorResponse("Missing SMTP encryption key.", 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!serviceRoleKey) return errorResponse("Missing Supabase service role key.", 500);
-    if (!supabaseUrl || !anonKey) return errorResponse("Supabase is not configured on the server.", 500);
+    if (!supabaseUrl || !supabaseAnonKey) return errorResponse("Supabase is not configured on the server.", 500);
 
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userError } = await authClient.auth.getUser();
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
     const body = await req.json() as SmtpSettingsPayload;
@@ -106,21 +110,26 @@ Deno.serve(async (req: Request) => {
     if (smtpPort < 1 || smtpPort > 65535) return errorResponse("smtp_port must be between 1 and 65535.");
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: existing, error: existingError } = await serviceClient
+    const { data: existingSettings, error: existingError } = await serviceClient
       .from("user_smtp_settings")
-      .select("smtp_password_encrypted")
+      .select("id, user_id, smtp_password_encrypted")
       .eq("user_id", user.id)
       .maybeSingle();
-    if (existingError) return errorResponse("Unable to load existing SMTP settings.", 500);
+    if (existingError) {
+      return errorResponse(
+        `Unable to load existing SMTP settings: ${existingError.message}`,
+        500,
+      );
+    }
 
-    const existingSettings = existing as ExistingSmtpSettings | null;
-    const shouldPreservePassword = Boolean(existingSettings) && !smtpPassword;
+    const existing = existingSettings as ExistingSmtpSettings | null;
+    const shouldPreservePassword = Boolean(existing) && !smtpPassword;
     if (!smtpPassword && !shouldPreservePassword) {
       return errorResponse("smtp_password is required when creating SMTP settings.");
     }
 
     const smtpPasswordEncrypted = shouldPreservePassword
-      ? existingSettings!.smtp_password_encrypted
+      ? existing!.smtp_password_encrypted
       : await encryptPassword(smtpPassword, encryptionKey);
     const { data, error: saveError } = await serviceClient
       .from("user_smtp_settings")
