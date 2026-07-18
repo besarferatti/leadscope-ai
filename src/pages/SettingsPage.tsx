@@ -80,6 +80,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [savedMessage, setSavedMessage] = useState('Saved successfully.');
@@ -183,6 +184,36 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
       setError('Unable to save SMTP settings.');
     }
     setSaving(false);
+  }
+
+  async function handleTestSmtpConnection() {
+    setTestingSmtp(true);
+    setError('');
+    setSaved(false);
+
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('test-smtp-connection');
+
+      if (functionError) {
+        const response = functionError.context;
+        if (response instanceof Response) {
+          const errorData = await response.json().catch(() => null) as { error?: string } | null;
+          setError(errorData?.error ?? functionError.message);
+        } else {
+          setError(functionError.message);
+        }
+      } else if (data?.error) {
+        setError(data.error);
+      } else if (data?.success) {
+        showSaved('SMTP test email sent successfully.');
+      } else {
+        setError('Unable to test SMTP connection.');
+      }
+    } catch {
+      setError('Unable to test SMTP connection.');
+    } finally {
+      setTestingSmtp(false);
+    }
   }
 
   async function handleUpgrade(planId: PlanId) {
@@ -405,7 +436,11 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
             <input type="checkbox" checked={smtpSettings.smtp_secure} onChange={e => setSmtpSettings(p => ({ ...p, smtp_secure: e.target.checked }))} className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500" />
             Secure connection
           </label>
-          <div className="flex justify-end pt-1">
+          <div className="flex flex-wrap justify-end gap-3 pt-1">
+            <button type="button" disabled={testingSmtp} onClick={handleTestSmtpConnection} className="btn-secondary px-6">
+              <Mail className="w-4 h-4" />
+              {testingSmtp ? 'Testing...' : 'Test SMTP Connection'}
+            </button>
             <button type="submit" disabled={saving} className="btn-primary px-6">
               <Save className="w-4 h-4" />
               {saving ? 'Saving...' : 'Save SMTP Settings'}
