@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Key, Building2, Globe, Save, Eye, EyeOff, CheckCircle, ShieldCheck,
   User, CreditCard, Shield, BarChart3, MessageSquare, Users as UsersIcon,
-  TrendingUp, Clock, Zap,
+  TrendingUp, Clock, Zap, Mail,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -14,8 +14,9 @@ import {
   getStripePriceId,
 } from '../lib/plans';
 import { createCheckoutSession, createPortalSession } from '../lib/stripe';
+import type { SmtpSettings } from '../types';
 
-type Tab = 'profile' | 'api-keys' | 'billing' | 'security';
+type Tab = 'profile' | 'api-keys' | 'smtp' | 'billing' | 'security';
 
 interface ApiKeySettings {
   agency_name: string;
@@ -29,6 +30,17 @@ const defaults: ApiKeySettings = {
   agency_website: '',
   default_language: 'English',
   default_tone: 'Professional',
+};
+
+const smtpDefaults: SmtpSettings = {
+  from_name: '',
+  from_email: '',
+  reply_to_email: '',
+  smtp_host: '',
+  smtp_port: '',
+  smtp_username: '',
+  smtp_secure: true,
+  is_configured: false,
 };
 
 interface Props {
@@ -63,11 +75,14 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const { user, profile, refreshProfile } = useAuth();
   const [tab, setTab] = useState<Tab>(initialTab ?? (profile?.current_plan === 'free_trial' ? 'billing' : 'profile'));
   const [apiSettings, setApiSettings] = useState<ApiKeySettings>(defaults);
+  const [smtpSettings, setSmtpSettings] = useState<SmtpSettings>(smtpDefaults);
+  const [smtpPassword, setSmtpPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('Saved successfully.');
   const [upgradingTo, setUpgradingTo] = useState<PlanId | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
@@ -83,7 +98,14 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('user_settings').select('*').maybeSingle();
+      const [{ data: settingsData }, { data: smtpData }] = await Promise.all([
+        supabase.from('user_settings').select('*').maybeSingle(),
+        supabase
+          .from('user_smtp_settings')
+          .select('from_name, from_email, reply_to_email, smtp_host, smtp_port, smtp_username, smtp_secure, is_configured, updated_at')
+          .maybeSingle(),
+      ]);
+      const data = settingsData;
       if (data) {
         setApiSettings({
           agency_name: data.agency_name ?? '',
@@ -92,13 +114,27 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
           default_tone: data.default_tone ?? 'Professional',
         });
       }
+      if (smtpData) {
+        setSmtpSettings({
+          from_name: smtpData.from_name ?? '',
+          from_email: smtpData.from_email ?? '',
+          reply_to_email: smtpData.reply_to_email ?? '',
+          smtp_host: smtpData.smtp_host ?? '',
+          smtp_port: smtpData.smtp_port ?? '',
+          smtp_username: smtpData.smtp_username ?? '',
+          smtp_secure: smtpData.smtp_secure ?? true,
+          is_configured: smtpData.is_configured ?? false,
+          updated_at: smtpData.updated_at,
+        });
+      }
       setFullName(profile?.full_name ?? '');
       setLoading(false);
     }
     load();
   }, [user, profile?.full_name]);
 
-  function showSaved() {
+  function showSaved(message = 'Saved successfully.') {
+    setSavedMessage(message);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }
@@ -125,6 +161,27 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
       .upsert({ id: user!.id, ...apiSettings, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (err) setError(err.message);
     else showSaved();
+    setSaving(false);
+  }
+
+  async function handleSaveSmtpSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const { data, error: functionError } = await supabase.functions.invoke('save-smtp-settings', {
+      body: { ...smtpSettings, smtp_password: smtpPassword },
+    });
+    if (functionError) {
+      setError(functionError.message);
+    } else if (data?.error) {
+      setError(data.error);
+    } else if (data?.settings) {
+      setSmtpSettings(data.settings as SmtpSettings);
+      setSmtpPassword('');
+      showSaved('SMTP settings saved');
+    } else {
+      setError('Unable to save SMTP settings.');
+    }
     setSaving(false);
   }
 
@@ -161,6 +218,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'api-keys', label: 'API Keys', icon: Key },
+    { id: 'smtp', label: 'Email / SMTP', icon: Mail },
     { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'security', label: 'Security', icon: Shield },
   ];
@@ -199,7 +257,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
       {saved && (
         <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
           <CheckCircle className="w-5 h-5 flex-shrink-0" />
-          <p className="text-sm font-medium">Saved successfully.</p>
+          <p className="text-sm font-medium">{savedMessage}</p>
         </div>
       )}
       {upgradeMsg && (
@@ -296,6 +354,61 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
             <button type="submit" disabled={saving} className="btn-primary px-8 py-2.5">
               <Save className="w-4 h-4" />
               {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {tab === 'smtp' && (
+        <form onSubmit={handleSaveSmtpSettings} className="card p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
+              <Mail className="w-4 h-4 text-violet-400" />
+            </div>
+            <div>
+              <h2 className="text-white font-semibold">Email Sending / SMTP</h2>
+              <p className="text-slate-500 text-xs mt-0.5">Save the connection details used for future email sending.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">From Name</label>
+              <input className="input" value={smtpSettings.from_name} onChange={e => setSmtpSettings(p => ({ ...p, from_name: e.target.value }))} placeholder="Your name or company" />
+            </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">From Email</label>
+              <input type="email" required className="input" value={smtpSettings.from_email} onChange={e => setSmtpSettings(p => ({ ...p, from_email: e.target.value }))} placeholder="you@example.com" />
+            </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">Reply-To Email</label>
+              <input type="email" className="input" value={smtpSettings.reply_to_email} onChange={e => setSmtpSettings(p => ({ ...p, reply_to_email: e.target.value }))} placeholder="replies@example.com" />
+            </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">SMTP Host</label>
+              <input required className="input" value={smtpSettings.smtp_host} onChange={e => setSmtpSettings(p => ({ ...p, smtp_host: e.target.value }))} placeholder="smtp.example.com" />
+            </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">SMTP Port</label>
+              <input required type="number" min="1" max="65535" className="input" value={smtpSettings.smtp_port} onChange={e => setSmtpSettings(p => ({ ...p, smtp_port: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="465" />
+            </div>
+            <div>
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">SMTP Username</label>
+              <input required className="input" value={smtpSettings.smtp_username} onChange={e => setSmtpSettings(p => ({ ...p, smtp_username: e.target.value }))} placeholder="SMTP username" autoComplete="username" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-slate-300 text-sm font-medium mb-1.5">SMTP Password / App Password</label>
+              <input type="password" className="input" value={smtpPassword} onChange={e => setSmtpPassword(e.target.value)} placeholder={smtpSettings.is_configured ? 'Leave blank to keep existing password' : 'SMTP password or app password'} autoComplete="new-password" required={!smtpSettings.is_configured} />
+              <p className="text-slate-500 text-xs mt-1.5">Use an app password when required by your email provider.</p>
+            </div>
+          </div>
+          <label className="flex items-center gap-3 text-sm text-slate-300 cursor-pointer w-fit">
+            <input type="checkbox" checked={smtpSettings.smtp_secure} onChange={e => setSmtpSettings(p => ({ ...p, smtp_secure: e.target.checked }))} className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500" />
+            Secure connection
+          </label>
+          <div className="flex justify-end pt-1">
+            <button type="submit" disabled={saving} className="btn-primary px-6">
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save SMTP Settings'}
             </button>
           </div>
         </form>
