@@ -1,9 +1,33 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+type SmtpSettingsPayload = {
+  from_name?: unknown;
+  from_email?: unknown;
+  reply_to_email?: unknown;
+  smtp_host?: unknown;
+  smtp_port?: unknown;
+  smtp_username?: unknown;
+  smtp_password?: unknown;
+  smtp_secure?: unknown;
+};
+
+type SafeSmtpSettings = {
+  from_name: string;
+  from_email: string;
+  reply_to_email: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_secure: boolean;
+  is_configured: boolean;
+  updated_at: string;
 };
 
 function jsonResponse(data: unknown, status = 200) {
@@ -12,9 +36,7 @@ function jsonResponse(data: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message, version: "smtp-v4-no-existing-load" }, status);
-}
+
 function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
@@ -29,40 +51,42 @@ function isEmail(value: string) {
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
   return btoa(binary);
-}
-
-async function getEncryptionKey(secret: string) {
-  const encoder = new TextEncoder();
-  const hash = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
-
-  return crypto.subtle.importKey(
-    "raw",
-    hash,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"],
-  );
 }
 
 async function encryptPassword(password: string, secret: string) {
   const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await getEncryptionKey(secret);
 
-  const encrypted = await crypto.subtle.encrypt(
+  const keyMaterial = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(secret),
+  );
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyMaterial,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"],
+  );
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
     encoder.encode(password),
   );
 
-  return `${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(encrypted))}`;
+  return `${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(ciphertext))}`;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
@@ -70,23 +94,37 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return errorResponse("Missing Authorization Bearer token.", 401);
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey =
       Deno.env.get("SUPABASE_ANON_KEY") ||
       Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ||
       Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const encryptionSecret = Deno.env.get("SMTP_ENCRYPTION_KEY");
+    const encryptionKey = Deno.env.get("SMTP_ENCRYPTION_KEY")?.trim();
 
-    if (!supabaseUrl) return errorResponse("Missing Supabase URL.", 500);
-    if (!anonKey) return errorResponse("Missing Supabase anon key.", 500);
-    if (!serviceRoleKey) return errorResponse("Missing Supabase service role key.", 500);
-    if (!encryptionSecret) return errorResponse("Missing SMTP encryption key.", 500);
+    if (!supabaseUrl) {
+      return errorResponse("Missing Supabase URL.", 500);
+    }
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return errorResponse("Missing authorization header.", 401);
+    if (!anonKey) {
+      return errorResponse("Missing Supabase anon key.", 500);
+    }
 
-    const authClient = createClient(supabaseUrl, anonKey, {
+    if (!serviceRoleKey) {
+      return errorResponse("Missing Supabase service role key.", 500);
+    }
+
+    if (!encryptionKey) {
+      return errorResponse("Missing SMTP encryption key.", 500);
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: authHeader,
@@ -97,13 +135,13 @@ Deno.serve(async (req: Request) => {
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser();
+    } = await userClient.auth.getUser();
 
     if (userError || !user) {
       return errorResponse("Unauthorized.", 401);
     }
 
-    const body = await req.json();
+    const body = (await req.json()) as SmtpSettingsPayload;
 
     const fromName = stringValue(body.from_name);
     const fromEmail = stringValue(body.from_email);
@@ -119,7 +157,9 @@ Deno.serve(async (req: Request) => {
       typeof body.smtp_secure === "boolean" ? body.smtp_secure : true;
 
     if (!fromEmail || !smtpHost || !smtpUsername || !Number.isInteger(smtpPort)) {
-      return errorResponse("from_email, smtp_host, smtp_port, and smtp_username are required.");
+      return errorResponse(
+        "from_email, smtp_host, smtp_port, and smtp_username are required.",
+      );
     }
 
     if (!isEmail(fromEmail) || (replyToEmail && !isEmail(replyToEmail))) {
@@ -134,7 +174,10 @@ Deno.serve(async (req: Request) => {
       return errorResponse("smtp_password is required.");
     }
 
-    const smtpPasswordEncrypted = await encryptPassword(smtpPassword, encryptionSecret);
+    const smtpPasswordEncrypted = await encryptPassword(
+      smtpPassword,
+      encryptionKey,
+    );
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
@@ -162,10 +205,13 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (saveError) {
-      return errorResponse(`Unable to save SMTP settings: ${saveError.message}`, 500);
+      return errorResponse(
+        `Unable to save SMTP settings: ${saveError.message}`,
+        500,
+      );
     }
 
-    return jsonResponse({ settings: data });
+    return jsonResponse({ settings: data as SafeSmtpSettings });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return errorResponse(`Unable to save SMTP settings: ${message}`, 500);
