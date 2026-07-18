@@ -73,12 +73,13 @@ Deno.serve(async (req: Request) => {
     if (!authHeader?.startsWith("Bearer ")) return errorResponse("Missing Authorization Bearer token", 401);
 
     const encryptionKey = Deno.env.get("SMTP_ENCRYPTION_KEY")?.trim();
-    if (!encryptionKey) return errorResponse("SMTP encryption is not configured on the server.", 500);
+    if (!encryptionKey) return errorResponse("Missing SMTP encryption key.", 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !anonKey || !serviceRoleKey) return errorResponse("Supabase is not configured on the server.", 500);
+    if (!serviceRoleKey) return errorResponse("Missing Supabase service role key.", 500);
+    if (!supabaseUrl || !anonKey) return errorResponse("Supabase is not configured on the server.", 500);
 
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: userError } = await userClient.auth.getUser();
@@ -106,7 +107,7 @@ Deno.serve(async (req: Request) => {
       .select("smtp_password_encrypted")
       .eq("user_id", user.id)
       .maybeSingle();
-    if (existingError) return errorResponse("Unable to load SMTP settings.", 500);
+    if (existingError) return errorResponse("Unable to load existing SMTP settings.", 500);
 
     const existingPassword = existing?.smtp_password_encrypted as string | null | undefined;
     if (!smtpPassword && !existingPassword) return errorResponse("smtp_password is required when creating SMTP settings.");
@@ -134,8 +135,7 @@ Deno.serve(async (req: Request) => {
     if (saveError) return errorResponse("Unable to save SMTP settings.", 500);
 
     return jsonResponse({ settings: data as SafeSmtpSettings });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unable to save SMTP settings.";
-    return errorResponse(message, 500);
+  } catch {
+    return errorResponse("Unable to save SMTP settings.", 500);
   }
 });
