@@ -25,16 +25,16 @@ type SmtpSettings = {
   is_configured: boolean | null;
 };
 
-const SMTP_CONNECTION_ERROR_CODES = new Set([
-  'ECONNECTION',
-  'ECONNREFUSED',
-  'ENOTFOUND',
-  'ESOCKET',
-  'ETIMEDOUT',
-]);
+type SmtpDebugDetails = {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_secure?: boolean;
+  smtp_username?: string;
+  from_email?: string;
+};
 
-function errorResponse(res: ApiResponse, message: string, status = 400) {
-  return res.status(status).json({ error: message });
+function errorResponse(res: ApiResponse, message: string, status = 400, debug?: SmtpDebugDetails) {
+  return res.status(status).json({ error: message, ...(debug ? { debug } : {}) });
 }
 
 function getBearerToken(authorization: string | string[] | undefined) {
@@ -63,21 +63,48 @@ function decryptPassword(encryptedPassword: string, encryptionKey: string) {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
-function smtpErrorMessage(error: unknown) {
+function safeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return message
+    .replace(/(smtp_password_encrypted|SMTP_ENCRYPTION_KEY|SUPABASE_SERVICE_ROLE_KEY)\s*[=:]\s*\S+/gi, '$1=[REDACTED]')
+    .replace(/:\/\/[^\s:@/]+:[^\s@/]+@/g, '://[REDACTED]@')
+    .replace(/\b(pass(?:word)?|auth)\s*[=:]\s*\S+/gi, '$1=[REDACTED]');
+}
+
+function maskSmtpUsername(username: string) {
+  const [localPart, domain] = username.split('@');
+  const maskedLocalPart = `${localPart.slice(0, 2)}********`;
+
+  return domain ? `${maskedLocalPart}@${domain}` : maskedLocalPart;
+}
+
+function smtpDebugDetails(settings: SmtpSettings): SmtpDebugDetails {
+  return {
+    smtp_host: settings.smtp_host ?? undefined,
+    smtp_port: settings.smtp_port ?? undefined,
+    smtp_secure: settings.smtp_secure ?? true,
+    smtp_username: settings.smtp_username ? maskSmtpUsername(settings.smtp_username) : undefined,
+    from_email: settings.from_email ?? undefined,
+  };
+}
+
+function smtpVerifyErrorMessage(error: unknown) {
   const code = error instanceof Error && 'code' in error ? String(error.code) : '';
-  const responseCode = error instanceof Error && 'responseCode' in error
-    ? Number(error.responseCode)
-    : 0;
 
-  if (code === 'EAUTH' || responseCode === 535) {
-    return 'SMTP authentication failed. Check your username and password.';
+  if (code === 'EAUTH') {
+    return 'SMTP authentication failed. Check your SMTP username and password.';
   }
 
-  if (SMTP_CONNECTION_ERROR_CODES.has(code)) {
-    return 'SMTP connection failed. Check host, port, and secure connection.';
+  if (code === 'ETIMEDOUT' || code === 'ESOCKET') {
+    return 'SMTP connection timed out. Check SMTP host, port, and secure connection.';
   }
 
-  return 'Unable to send test email: The SMTP server rejected the test email.';
+  if (/certificate|ssl|tls|wrong version|handshake/i.test(safeErrorMessage(error))) {
+    return 'SMTP SSL/TLS failed. Try port 465 with secure ON, or port 587 with secure OFF/STARTTLS.';
+  }
+
+  return `SMTP connection failed: ${safeErrorMessage(error)}`;
 }
 
 export const config = { runtime: 'nodejs' };
@@ -94,11 +121,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const encryptionKey = process.env.SMTP_ENCRYPTION_KEY?.trim();
-  if (!supabaseUrl || !anonKey || !serviceRoleKey || !encryptionKey) {
-    return errorResponse(res, 'Unable to send test email.', 500);
+  if (!supabaseUrl) {
+    return errorResponse(res, 'Missing SUPABASE_URL', 500);
+  }
+  if (!anonKey) {
+    return errorResponse(res, 'Missing SUPABASE_ANON_KEY', 500);
+  }
+  if (!serviceRoleKey) {
+    return errorResponse(res, 'Missing SUPABASE_SERVICE_ROLE_KEY', 500);
+  }
+  if (!encryptionKey) {
+    return errorResponse(res, 'Missing SMTP_ENCRYPTION_KEY', 500);
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -117,7 +153,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     .maybeSingle<SmtpSettings>();
 
   if (settingsError) {
-    return errorResponse(res, 'Unable to send test email.', 500);
+    return errorResponse(res, `Unable to load SMTP settings: ${safeErrorMessage(settingsError)}`, 500);
   }
   if (!settings?.is_configured) {
     return errorResponse(res, 'SMTP settings are not configured.');
@@ -133,20 +169,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     password = decryptPassword(settings.smtp_password_encrypted, encryptionKey);
   } catch {
-    return errorResponse(res, 'Unable to send test email: Please save SMTP settings again.', 500);
+    return errorResponse(res, 'Unable to decrypt SMTP password. Please save SMTP settings again.', 500);
+  }
+
+  const debug = smtpDebugDetails(settings);
+  const transporter = nodemailer.createTransport({
+    host: settings.smtp_host,
+    port: settings.smtp_port,
+    secure: settings.smtp_secure ?? true,
+    auth: { user: settings.smtp_username, pass: password },
+  });
+  const from = settings.from_name?.trim()
+    ? `"${settings.from_name.trim()}" <${settings.from_email}>`
+    : settings.from_email;
+
+  try {
+    await transporter.verify();
+  } catch (error) {
+    return errorResponse(res, smtpVerifyErrorMessage(error), 502, debug);
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: settings.smtp_host,
-      port: settings.smtp_port,
-      secure: settings.smtp_secure ?? true,
-      auth: { user: settings.smtp_username, pass: password },
-    });
-    const from = settings.from_name?.trim()
-      ? `"${settings.from_name.trim()}" <${settings.from_email}>`
-      : settings.from_email;
-
     await transporter.sendMail({
       from,
       to: settings.reply_to_email?.trim() || settings.from_email,
@@ -154,7 +197,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       text: 'This is a test email from LeadScope AI to confirm your SMTP settings are working.',
     });
   } catch (error) {
-    return errorResponse(res, smtpErrorMessage(error), 502);
+    return errorResponse(res, `Unable to send test email: ${safeErrorMessage(error)}`, 502, debug);
   }
 
   return res.status(200).json({ success: true });
