@@ -110,27 +110,31 @@ Deno.serve(async (req: Request) => {
     if (smtpPort < 1 || smtpPort > 65535) return errorResponse("smtp_port must be between 1 and 65535.");
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: existingSettings, error: existingError } = await serviceClient
-      .from("user_smtp_settings")
-      .select("id, user_id, smtp_password_encrypted")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (existingError) {
-      return errorResponse(
-        `Unable to load existing SMTP settings: ${existingError.message}`,
-        500,
-      );
-    }
+    let smtpPasswordEncrypted: string | null = null;
 
-    const existing = existingSettings as ExistingSmtpSettings | null;
-    const shouldPreservePassword = Boolean(existing) && !smtpPassword;
-    if (!smtpPassword && !shouldPreservePassword) {
-      return errorResponse("smtp_password is required when creating SMTP settings.");
-    }
+    if (smtpPassword) {
+      smtpPasswordEncrypted = await encryptPassword(smtpPassword, encryptionKey);
+    } else {
+      const { data: existingSettings, error: existingError } = await serviceClient
+        .from("user_smtp_settings")
+        .select("id, user_id, smtp_password_encrypted")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    const smtpPasswordEncrypted = shouldPreservePassword
-      ? existing!.smtp_password_encrypted
-      : await encryptPassword(smtpPassword, encryptionKey);
+      if (existingError) {
+        return errorResponse(
+          `Unable to load existing SMTP settings: ${existingError.message}`,
+          500,
+        );
+      }
+
+      const existing = existingSettings as ExistingSmtpSettings | null;
+      if (!existing?.smtp_password_encrypted) {
+        return errorResponse("smtp_password is required when creating SMTP settings.");
+      }
+
+      smtpPasswordEncrypted = existing.smtp_password_encrypted;
+    }
     const { data, error: saveError } = await serviceClient
       .from("user_smtp_settings")
       .upsert({
@@ -148,7 +152,12 @@ Deno.serve(async (req: Request) => {
       }, { onConflict: "user_id" })
       .select("from_name, from_email, reply_to_email, smtp_host, smtp_port, smtp_username, smtp_secure, is_configured, updated_at")
       .single();
-    if (saveError) return errorResponse("Unable to save SMTP settings.", 500);
+    if (saveError) {
+      return errorResponse(
+        `Unable to save SMTP settings: ${saveError.message}`,
+        500,
+      );
+    }
 
     return jsonResponse({ settings: data as SafeSmtpSettings });
   } catch {
