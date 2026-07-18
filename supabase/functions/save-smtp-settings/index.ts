@@ -12,7 +12,9 @@ function jsonResponse(data: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-
+function errorResponse(message: string, status = 400) {
+  return jsonResponse({ error: message, version: "smtp-v4-no-existing-load" }, status);
+}
 function errorResponse(message: string, status = 400) {
   return jsonResponse({ error: message }, status);
 }
