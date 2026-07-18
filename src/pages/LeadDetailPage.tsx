@@ -37,6 +37,11 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [msgLoading, setMsgLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [msgExpanded, setMsgExpanded] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState({ subject: '', body: '' });
+  const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
+  const [messageSaveError, setMessageSaveError] = useState('');
+  const [savedMessageId, setSavedMessageId] = useState<string | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const seoPack = audit?.seo_content_pack;
 
@@ -246,6 +251,50 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     await navigator.clipboard.writeText(text);
     setCopied(key);
     setTimeout(() => setCopied(null), 2000);
+  }
+
+  function startEditingMessage(message: OutreachMessage) {
+    setEditingMessageId(message.id);
+    setMessageDraft({ subject: message.subject ?? '', body: message.body ?? '' });
+    setMessageSaveError('');
+    setSavedMessageId(null);
+    setMsgExpanded(message.id);
+  }
+
+  function cancelEditingMessage() {
+    setEditingMessageId(null);
+    setMessageDraft({ subject: '', body: '' });
+    setMessageSaveError('');
+  }
+
+  async function saveMessageChanges(message: OutreachMessage) {
+    const body = messageDraft.body.trim();
+    if (!body) {
+      setMessageSaveError('Message body cannot be empty.');
+      return;
+    }
+
+    setSavingMessageId(message.id);
+    setMessageSaveError('');
+
+    const { data, error: updateError } = await supabase
+      .from('outreach_messages')
+      .update({ subject: messageDraft.subject, body })
+      .eq('id', message.id)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      setMessageSaveError(updateError.message);
+    } else {
+      setMessages(current => current.map(item => item.id === message.id ? data as OutreachMessage : item));
+      setEditingMessageId(null);
+      setMessageDraft({ subject: '', body: '' });
+      setSavedMessageId(message.id);
+      setTimeout(() => setSavedMessageId(current => current === message.id ? null : current), 2500);
+    }
+
+    setSavingMessageId(null);
   }
 
   if (loading) return <LoadingSpinner message="Loading lead..." />;
@@ -730,6 +779,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
               <div className="divide-y divide-slate-800">
                 {messages.map((msg, i) => {
                   const isExpanded = msgExpanded === msg.id || (msgExpanded === 'new' && i === 0);
+                  const isEditing = editingMessageId === msg.id;
+                  const copyContent = isEditing
+                    ? (msg.channel === 'email' ? `Subject: ${messageDraft.subject}\n\n${messageDraft.body}` : messageDraft.body)
+                    : (msg.channel === 'email' ? `Subject: ${msg.subject}\n\n${msg.body}` : msg.body);
                   return (
                     <div key={msg.id} className="p-5">
                       <div
@@ -744,11 +797,17 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                         </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={e => { e.stopPropagation(); copyText(msg.channel === 'email' ? `Subject: ${msg.subject}\n\n${msg.body}` : msg.body, msg.id); }}
+                            onClick={e => { e.stopPropagation(); copyText(copyContent, msg.id); }}
                             className="text-slate-500 hover:text-slate-300 transition-colors"
                             title="Copy message"
                           >
                             {copied === msg.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); startEditingMessage(msg); }}
+                            className="text-slate-400 hover:text-slate-200 text-xs font-medium transition-colors"
+                          >
+                            Edit
                           </button>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
                         </div>
@@ -756,16 +815,55 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
                       {isExpanded && (
                         <div className="mt-4 space-y-3">
-                          {msg.channel === 'email' && msg.subject && (
-                            <div className="bg-slate-800/60 rounded-lg p-3">
-                              <span className="text-slate-500 text-xs font-medium uppercase">Subject</span>
-                              <p className="text-slate-200 text-sm mt-1 font-medium">{msg.subject}</p>
-                            </div>
+                          {isEditing ? (
+                            <>
+                              {msg.channel === 'email' && (
+                                <div>
+                                  <label htmlFor={`message-subject-${msg.id}`} className="block text-slate-500 text-xs font-medium uppercase mb-1.5">Subject</label>
+                                  <input
+                                    id={`message-subject-${msg.id}`}
+                                    className="input text-sm"
+                                    value={messageDraft.subject}
+                                    onChange={e => setMessageDraft(draft => ({ ...draft, subject: e.target.value }))}
+                                  />
+                                </div>
+                              )}
+                              <div>
+                                <label htmlFor={`message-body-${msg.id}`} className="block text-slate-500 text-xs font-medium uppercase mb-1.5">Body</label>
+                                <textarea
+                                  id={`message-body-${msg.id}`}
+                                  className="input min-h-[180px] resize-y text-sm leading-relaxed"
+                                  value={messageDraft.body}
+                                  onChange={e => setMessageDraft(draft => ({ ...draft, body: e.target.value }))}
+                                />
+                              </div>
+                              {messageSaveError && <p className="text-red-400 text-xs">{messageSaveError}</p>}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => saveMessageChanges(msg)}
+                                  disabled={savingMessageId === msg.id}
+                                  className="btn-primary text-xs py-2"
+                                >
+                                  {savingMessageId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</> : 'Save Changes'}
+                                </button>
+                                <button onClick={cancelEditingMessage} disabled={savingMessageId === msg.id} className="btn-secondary text-xs py-2">Cancel</button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {msg.channel === 'email' && msg.subject && (
+                                <div className="bg-slate-800/60 rounded-lg p-3">
+                                  <span className="text-slate-500 text-xs font-medium uppercase">Subject</span>
+                                  <p className="text-slate-200 text-sm mt-1 font-medium">{msg.subject}</p>
+                                </div>
+                              )}
+                              <div className="bg-slate-800/60 rounded-lg p-3">
+                                <span className="text-slate-500 text-xs font-medium uppercase">Body</span>
+                                <pre className="text-slate-300 text-sm mt-1 whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
+                              </div>
+                            </>
                           )}
-                          <div className="bg-slate-800/60 rounded-lg p-3">
-                            <span className="text-slate-500 text-xs font-medium uppercase">Body</span>
-                            <pre className="text-slate-300 text-sm mt-1 whitespace-pre-wrap font-sans leading-relaxed">{msg.body}</pre>
-                          </div>
+                          {savedMessageId === msg.id && <p className="text-emerald-400 text-xs">Saved</p>}
                         </div>
                       )}
                     </div>
