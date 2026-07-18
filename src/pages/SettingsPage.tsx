@@ -192,22 +192,25 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     setSaved(false);
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('test-smtp-connection');
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (functionError) {
-        const response = functionError.context;
-        if (response instanceof Response) {
-          const errorData = await response.json().catch(() => null) as { error?: string } | null;
-          setError(errorData?.error ?? functionError.message);
-        } else {
-          setError(functionError.message);
-        }
-      } else if (data?.error) {
-        setError(data.error);
-      } else if (data?.success) {
+      if (!session?.access_token) {
+        setError('Unable to test SMTP connection. Please sign in again.');
+        return;
+      }
+
+      const response = await fetch('/api/test-smtp-connection', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const data = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
+
+      if (response.ok && data?.success) {
         showSaved('SMTP test email sent successfully.');
       } else {
-        setError('Unable to test SMTP connection.');
+        setError(data?.error ?? 'Unable to test SMTP connection.');
       }
     } catch {
       setError('Unable to test SMTP connection.');
