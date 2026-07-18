@@ -30,12 +30,6 @@ type SafeSmtpSettings = {
   updated_at: string;
 };
 
-type ExistingSmtpSettings = {
-  id: string;
-  user_id: string;
-  smtp_password_encrypted: string | null;
-};
-
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -106,35 +100,12 @@ Deno.serve(async (req: Request) => {
     if (!fromEmail || !smtpHost || !smtpUsername || !Number.isInteger(smtpPort)) {
       return errorResponse("from_email, smtp_host, smtp_port, and smtp_username are required.");
     }
+    if (!smtpPassword) return errorResponse("smtp_password is required.");
     if (!isEmail(fromEmail) || (replyToEmail && !isEmail(replyToEmail))) return errorResponse("Enter valid email addresses.");
     if (smtpPort < 1 || smtpPort > 65535) return errorResponse("smtp_port must be between 1 and 65535.");
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
-    let smtpPasswordEncrypted: string | null = null;
-
-    if (smtpPassword) {
-      smtpPasswordEncrypted = await encryptPassword(smtpPassword, encryptionKey);
-    } else {
-      const { data: existingSettings, error: existingError } = await serviceClient
-        .from("user_smtp_settings")
-        .select("id, user_id, smtp_password_encrypted")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (existingError) {
-        return errorResponse(
-          `Unable to load existing SMTP settings: ${existingError.message}`,
-          500,
-        );
-      }
-
-      const existing = existingSettings as ExistingSmtpSettings | null;
-      if (!existing?.smtp_password_encrypted) {
-        return errorResponse("smtp_password is required when creating SMTP settings.");
-      }
-
-      smtpPasswordEncrypted = existing.smtp_password_encrypted;
-    }
+    const smtpPasswordEncrypted = await encryptPassword(smtpPassword, encryptionKey);
     const { data, error: saveError } = await serviceClient
       .from("user_smtp_settings")
       .upsert({
