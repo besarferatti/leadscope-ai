@@ -120,24 +120,29 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return errorResponse(res, 'Missing Authorization Bearer token.', 401);
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const encryptionKey = process.env.SMTP_ENCRYPTION_KEY?.trim();
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const smtpEncryptionKey = process.env.SMTP_ENCRYPTION_KEY;
   if (!supabaseUrl) {
-    return errorResponse(res, 'Missing SUPABASE_URL', 500);
+    return errorResponse(res, 'Missing SUPABASE_URL or VITE_SUPABASE_URL', 500);
   }
-  if (!anonKey) {
-    return errorResponse(res, 'Missing SUPABASE_ANON_KEY', 500);
+  if (!supabaseAnonKey) {
+    return errorResponse(res, 'Missing SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY', 500);
   }
-  if (!serviceRoleKey) {
+  if (!supabaseServiceRoleKey) {
     return errorResponse(res, 'Missing SUPABASE_SERVICE_ROLE_KEY', 500);
   }
-  if (!encryptionKey) {
+  if (!smtpEncryptionKey) {
     return errorResponse(res, 'Missing SMTP_ENCRYPTION_KEY', 500);
   }
 
-  const userClient = createClient(supabaseUrl, anonKey, {
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authorization } },
   });
   const { data: { user }, error: userError } = await userClient.auth.getUser();
@@ -145,7 +150,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return errorResponse(res, 'Unauthorized.', 401);
   }
 
-  const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+  const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey);
   const { data: settings, error: settingsError } = await serviceClient
     .from('user_smtp_settings')
     .select('from_name, from_email, reply_to_email, smtp_host, smtp_port, smtp_username, smtp_password_encrypted, smtp_secure, is_configured')
@@ -167,7 +172,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   let password: string;
   try {
-    password = decryptPassword(settings.smtp_password_encrypted, encryptionKey);
+    password = decryptPassword(settings.smtp_password_encrypted, smtpEncryptionKey);
   } catch {
     return errorResponse(res, 'Unable to decrypt SMTP password. Please save SMTP settings again.', 500);
   }
