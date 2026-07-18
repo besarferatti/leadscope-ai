@@ -111,6 +111,18 @@ export interface UserSettings {
   default_tone?: string;
 }
 
+export interface SmtpSettings {
+  from_name: string;
+  from_email: string;
+  reply_to_email: string;
+  smtp_host: string;
+  smtp_port: number | '';
+  smtp_username: string;
+  smtp_secure: boolean;
+  is_configured: boolean;
+  updated_at?: string;
+}
+
 // Re-export UserProfile from plans so it's accessible from types
 export type { UserProfile } from '../lib/plans';
 
