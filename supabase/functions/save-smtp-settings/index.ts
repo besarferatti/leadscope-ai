@@ -30,6 +30,10 @@ type SafeSmtpSettings = {
   updated_at: string;
 };
 
+type ExistingSmtpSettings = {
+  smtp_password_encrypted: string | null;
+};
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -109,12 +113,15 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (existingError) return errorResponse("Unable to load existing SMTP settings.", 500);
 
-    const existingPassword = existing?.smtp_password_encrypted as string | null | undefined;
-    if (!smtpPassword && !existingPassword) return errorResponse("smtp_password is required when creating SMTP settings.");
+    const existingSettings = existing as ExistingSmtpSettings | null;
+    const shouldPreservePassword = Boolean(existingSettings) && !smtpPassword;
+    if (!smtpPassword && !shouldPreservePassword) {
+      return errorResponse("smtp_password is required when creating SMTP settings.");
+    }
 
-    const smtpPasswordEncrypted = smtpPassword
-      ? await encryptPassword(smtpPassword, encryptionKey)
-      : existingPassword;
+    const smtpPasswordEncrypted = shouldPreservePassword
+      ? existingSettings!.smtp_password_encrypted
+      : await encryptPassword(smtpPassword, encryptionKey);
     const { data, error: saveError } = await serviceClient
       .from("user_smtp_settings")
       .upsert({
