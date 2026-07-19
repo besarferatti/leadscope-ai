@@ -10,6 +10,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
 import { LeadsPage } from './pages/LeadsPage';
+import { EmailOutreachPage } from './pages/EmailOutreachPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
 import { SharedAuditReportPage } from './pages/SharedAuditReportPage';
 import { WebsitePreviewPage } from './pages/WebsitePreviewPage';
@@ -35,13 +36,14 @@ type AppPage =
   | 'dashboard'
   | 'searches'
   | 'leads'
+  | 'email-outreach'
   | 'lead-detail'
   | 'settings'
   | 'admin';
 
 const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'affiliate'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
-const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'settings', 'change-password'];
+const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'email-outreach', 'settings', 'change-password'];
 
 function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
   const { profile } = useAuth();
@@ -124,6 +126,7 @@ function AppInner() {
       case '/dashboard': return 'dashboard';
       case '/lead-searches': return 'searches';
       case '/leads': return 'leads';
+      case '/email-outreach': return 'email-outreach';
       case '/settings': return 'settings';
       case '/admin': return 'admin';
       default: return 'landing';
@@ -147,9 +150,9 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
-    const publicPath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : null;
-    if (publicPath && window.location.pathname !== publicPath) {
-      window.history.pushState({}, '', publicPath);
+    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'email-outreach' ? '/email-outreach' : null;
+    if (pagePath && window.location.pathname !== pagePath) {
+      window.history.pushState({}, '', pagePath);
     }
     window.scrollTo(0, 0);
   }
@@ -392,7 +395,7 @@ function AppInner() {
   }
 
   // Dashboard pages
-  const activePage = (['dashboard', 'searches', 'leads', 'settings'] as AppPage[]).includes(page)
+  const activePage = (['dashboard', 'searches', 'leads', 'email-outreach', 'settings'] as AppPage[]).includes(page)
     ? page
     : page === 'lead-detail' ? 'leads' : 'dashboard';
 
@@ -404,6 +407,8 @@ function AppInner() {
         return <LeadSearchesPage onNavigate={navigate} />;
       case 'leads':
         return <LeadsPage onNavigate={navigate} initialSearchId={pageParams.search_id} />;
+      case 'email-outreach':
+        return <EmailOutreachPage onNavigate={navigate} />;
       case 'lead-detail':
         return <LeadDetailPage leadId={pageParams.id} onBack={() => navigate('leads')} onNavigate={navigate} />;
       case 'settings':

@@ -104,6 +104,8 @@ export interface OutreachMessage {
 
 export interface OutreachEmailSend {
   id: string;
+  lead_id: string;
+  outreach_message_id: string | null;
   to_email: string;
   from_email: string;
   subject: string;
