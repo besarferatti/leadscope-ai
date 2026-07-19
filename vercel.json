@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/generate-social-image-package.ts": {
+      "includeFiles": "node_modules/@fontsource/inter/files/inter-latin-{400,600,700}-normal.woff"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

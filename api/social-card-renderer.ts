@@ -7,13 +7,31 @@ export type SocialCardContent = { title: string; benefit: string; highlights: st
 
 type Font = { name: string; data: ArrayBuffer; weight: 400 | 600 | 700; style: 'normal' };
 const require = createRequire(import.meta.url);
+const inter400Path = require.resolve(
+  '@fontsource/inter/files/inter-latin-400-normal.woff'
+);
+const inter600Path = require.resolve(
+  '@fontsource/inter/files/inter-latin-600-normal.woff'
+);
+const inter700Path = require.resolve(
+  '@fontsource/inter/files/inter-latin-700-normal.woff'
+);
+const fontFiles = [
+  { path: inter400Path, weight: 400 },
+  { path: inter600Path, weight: 600 },
+  { path: inter700Path, weight: 700 },
+] as const;
 let fontsPromise: Promise<Font[]> | undefined;
 
 async function loadFonts(): Promise<Font[]> {
-  fontsPromise ??= Promise.all(([400, 600, 700] as const).map(async weight => {
-    const path = require.resolve(`@fontsource/inter/files/inter-latin-${weight}-normal.woff`);
-    const buffer = await readFile(path);
-    return { name: 'Inter', data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), weight, style: 'normal' };
+  fontsPromise ??= Promise.all(fontFiles.map(async ({ path, weight }) => {
+    try {
+      const buffer = await readFile(path);
+      return { name: 'Inter', data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), weight, style: 'normal' };
+    } catch {
+      console.error(`[SocialCard] Unable to load Inter ${weight}.`);
+      throw new Error('Unable to load social card fonts.');
+    }
   }));
   return fontsPromise;
 }
