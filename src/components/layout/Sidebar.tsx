@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  LayoutDashboard, Search, Users, Settings, LogOut, Menu, X,
+  LayoutDashboard, Search, Users, Settings, LogOut, Menu, X, Mail,
   Crosshair, ChevronRight, Shield, TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -16,6 +16,7 @@ const userNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, page: 'dashboard' },
   { label: 'Lead Searches', icon: Search, page: 'searches' },
   { label: 'Leads', icon: Users, page: 'leads' },
+  { label: 'Email Outreach', icon: Mail, page: 'email-outreach' },
   { label: 'Settings', icon: Settings, page: 'settings' },
 ];
 
