@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Lead, LeadAudit, OutreachMessage, LeadStatus, WebsitePreview } from '../types';
+import { Lead, LeadAudit, OutreachEmailSend, OutreachMessage, LeadStatus, WebsitePreview } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
@@ -27,6 +27,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [audit, setAudit] = useState<LeadAudit | null>(null);
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
+  const [sentEmails, setSentEmails] = useState<OutreachEmailSend[]>([]);
+  const [sentEmailsLoading, setSentEmailsLoading] = useState(false);
+  const [sentEmailsError, setSentEmailsError] = useState('');
+  const [expandedSentEmailId, setExpandedSentEmailId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [auditLoading, setAuditLoading] = useState(false);
@@ -60,7 +64,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
   async function loadAll() {
     setLoading(true);
-    const [leadRes, auditRes, msgsRes, previewRes] = await Promise.all([
+    const [leadRes, auditRes, msgsRes, previewRes, sentEmailsRes] = await Promise.all([
       supabase.from('leads').select('*').eq('id', leadId).maybeSingle(),
       supabase.from('lead_audits').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('outreach_messages').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }),
@@ -71,6 +75,11 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('outreach_email_sends')
+        .select('id, to_email, from_email, subject, body, status, error_message, provider, sent_at, created_at')
+        .eq('lead_id', leadId)
+        .order('sent_at', { ascending: false }),
     ]);
     if (leadRes.error) setError(leadRes.error.message);
     else {
@@ -79,10 +88,33 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     }
     setAudit(auditRes.data ?? null);
     setMessages(msgsRes.data ?? []);
+    if (sentEmailsRes.error) {
+      setSentEmailsError('Unable to load sent emails.');
+    } else {
+      setSentEmails(sentEmailsRes.data as OutreachEmailSend[]);
+      setSentEmailsError('');
+    }
     const latestPreview = previewRes.data as WebsitePreview | null;
     setWebsitePreviewToken(latestPreview?.preview_token ?? null);
     setWebsitePreviewCreatedAt(latestPreview?.created_at ?? null);
     setLoading(false);
+  }
+
+  async function loadSentEmails() {
+    setSentEmailsLoading(true);
+    const { data, error: sentEmailsLoadError } = await supabase
+      .from('outreach_email_sends')
+      .select('id, to_email, from_email, subject, body, status, error_message, provider, sent_at, created_at')
+      .eq('lead_id', leadId)
+      .order('sent_at', { ascending: false });
+
+    if (sentEmailsLoadError) {
+      setSentEmailsError('Unable to load sent emails.');
+    } else {
+      setSentEmails(data as OutreachEmailSend[]);
+      setSentEmailsError('');
+    }
+    setSentEmailsLoading(false);
   }
 
   async function handleAnalyze() {
@@ -337,6 +369,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
       setSentMessageId(message.id);
       setLead(current => current ? { ...current, status: 'Contacted' } : current);
+      await loadSentEmails();
     } catch (sendError: unknown) {
       setSendMessageError(sendError instanceof Error ? sendError.message : 'Unable to send email.');
     } finally {
@@ -935,6 +968,77 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                               </button>
                             </div>
                           )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-white font-semibold">Sent Emails</h2>
+                <p className="text-slate-500 text-xs mt-1">Sent outreach emails for this lead.</p>
+              </div>
+              {sentEmailsLoading && <Loader2 className="w-4 h-4 animate-spin text-slate-500" aria-label="Loading sent emails" />}
+            </div>
+
+            {sentEmailsError ? (
+              <p className="p-5 text-amber-400 text-sm">Unable to load sent emails.</p>
+            ) : sentEmails.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mx-auto mb-3">
+                  <Mail className="w-6 h-6 text-slate-500" />
+                </div>
+                <p className="text-slate-400 text-sm">No emails sent yet.</p>
+                <p className="text-slate-600 text-xs mt-1">Sent outreach emails for this lead will appear here.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {sentEmails.map(email => {
+                  const isExpanded = expandedSentEmailId === email.id;
+                  const sentDate = email.sent_at ?? email.created_at;
+                  const isFailed = email.status === 'failed';
+                  return (
+                    <div key={email.id} className="p-5">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSentEmailId(isExpanded ? null : email.id)}
+                        className="w-full text-left"
+                        aria-expanded={isExpanded}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-slate-100 text-sm font-medium truncate">{email.subject}</p>
+                            <p className="text-slate-500 text-xs mt-1 truncate">To: {email.to_email}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className={`badge ${isFailed ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                              {isFailed ? 'Failed' : 'Sent'}
+                            </span>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-slate-600 text-xs mt-2">
+                          <span>{formatDate(sentDate)}</span>
+                          <span>{email.provider.toUpperCase()}</span>
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-4 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div className="bg-slate-800/60 rounded-lg p-3"><span className="text-slate-500 uppercase">To</span><p className="text-slate-300 mt-1 break-all">{email.to_email}</p></div>
+                            <div className="bg-slate-800/60 rounded-lg p-3"><span className="text-slate-500 uppercase">From</span><p className="text-slate-300 mt-1 break-all">{email.from_email}</p></div>
+                          </div>
+                          {isFailed && email.error_message && <p className="text-red-400 text-xs">{email.error_message}</p>}
+                          <div className="bg-slate-800/60 rounded-lg p-3">
+                            <span className="text-slate-500 text-xs font-medium uppercase">Email body</span>
+                            <pre className="text-slate-300 text-sm mt-1 whitespace-pre-wrap font-sans leading-relaxed">{email.body}</pre>
+                          </div>
                         </div>
                       )}
                     </div>
