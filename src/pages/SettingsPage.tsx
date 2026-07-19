@@ -192,17 +192,19 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     setSaved(false);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
 
-      if (!session?.access_token) {
-        setError('Unable to test SMTP connection. Please sign in again.');
+      if (sessionError || !accessToken) {
+        setError('You must be logged in to test SMTP connection.');
         return;
       }
 
       const response = await fetch('/api/test-smtp-connection', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
       });
       const data = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
