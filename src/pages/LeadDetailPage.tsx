@@ -42,6 +42,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
   const [messageSaveError, setMessageSaveError] = useState('');
   const [savedMessageId, setSavedMessageId] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sendingMessageId, setSendingMessageId] = useState<string | null>(null);
+  const [sendMessageError, setSendMessageError] = useState('');
+  const [sentMessageId, setSentMessageId] = useState<string | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const seoPack = audit?.seo_content_pack;
 
@@ -69,7 +73,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         .maybeSingle(),
     ]);
     if (leadRes.error) setError(leadRes.error.message);
-    else setLead(leadRes.data);
+    else {
+      setLead(leadRes.data);
+      setRecipientEmail(current => current || leadRes.data?.email || '');
+    }
     setAudit(auditRes.data ?? null);
     setMessages(msgsRes.data ?? []);
     const latestPreview = previewRes.data as WebsitePreview | null;
@@ -295,6 +302,46 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     }
 
     setSavingMessageId(null);
+  }
+
+  async function handleSendEmail(message: OutreachMessage) {
+    if (!lead) return;
+
+    const subject = (editingMessageId === message.id ? messageDraft.subject : message.subject).trim();
+    const body = (editingMessageId === message.id ? messageDraft.body : message.body).trim();
+    setSendingMessageId(message.id);
+    setSendMessageError('');
+    setSentMessageId(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Please sign in again before sending email.');
+
+      const response = await fetch('/api/send-outreach-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          outreach_message_id: message.id,
+          to_email: recipientEmail,
+          subject,
+          body,
+        }),
+      });
+      const data = await response.json() as { error?: string; success?: boolean };
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to send email.');
+
+      setSentMessageId(message.id);
+      setLead(current => current ? { ...current, status: 'Contacted' } : current);
+    } catch (sendError: unknown) {
+      setSendMessageError(sendError instanceof Error ? sendError.message : 'Unable to send email.');
+    } finally {
+      setSendingMessageId(null);
+    }
   }
 
   if (loading) return <LoadingSpinner message="Loading lead..." />;
@@ -864,6 +911,30 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                             </>
                           )}
                           {savedMessageId === msg.id && <p className="text-emerald-400 text-xs">Saved</p>}
+                          {msg.channel === 'email' && (
+                            <div className="border-t border-slate-800 pt-3 space-y-3">
+                              <div>
+                                <label htmlFor={`recipient-email-${msg.id}`} className="block text-slate-500 text-xs font-medium uppercase mb-1.5">Recipient Email</label>
+                                <input
+                                  id={`recipient-email-${msg.id}`}
+                                  type="email"
+                                  className="input text-sm"
+                                  value={recipientEmail}
+                                  onChange={e => setRecipientEmail(e.target.value)}
+                                  placeholder="client@example.com"
+                                />
+                              </div>
+                              {sendMessageError && <p className="text-red-400 text-xs">{sendMessageError}</p>}
+                              {sentMessageId === msg.id && <p className="text-emerald-400 text-xs">Email sent successfully.</p>}
+                              <button
+                                onClick={() => handleSendEmail(msg)}
+                                disabled={sendingMessageId === msg.id || !recipientEmail.trim()}
+                                className="btn-primary text-xs py-2"
+                              >
+                                {sendingMessageId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</> : <><Mail className="w-3.5 h-3.5" /> Send Email</>}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
