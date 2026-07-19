@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, ChevronLeft, CheckCircle2, Crosshair, Mail, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Crosshair, Mail, Search, Sparkles } from 'lucide-react';
 import { SEO } from '../components/SEO';
 
 interface Props {
@@ -7,134 +7,53 @@ interface Props {
   onLogin: () => void;
 }
 
-const sections = [
-  {
-    title: 'Lead Discovery',
-    icon: Search,
-    items: ['Search local businesses by location and niche', 'Google Places-based lead discovery', 'Business category detection', 'Website status targeting', 'No website, social-only, and has website filters'],
-  },
-  {
-    title: 'Saved Leads',
-    icon: BookOpen,
-    items: ['Save important leads', 'Filter saved and unsaved leads', 'Build a focused prospecting list'],
-  },
-  {
-    title: 'AI Website Audits',
-    icon: Sparkles,
-    items: ['Website, SEO, and conversion scores', 'Main issues and recommended offer', 'Personalization angle', 'Summary for outreach'],
-  },
-  {
-    title: 'SEO & Content Opportunity Pack',
-    icon: Sparkles,
-    items: ['Suggested, local, service, and long-tail keywords', 'Meta title, meta description, and H1 suggestion', 'Service page, blog, and Google Business post ideas', 'Homepage copy and recommended service'],
-  },
-  {
-    title: 'Shareable Audit Reports',
-    icon: BookOpen,
-    items: ['Public audit links', 'No login required for prospects', 'Multilingual reports', 'Internal pricing hidden from public reports'],
-  },
-  {
-    title: 'AI Website Preview Links',
-    icon: Sparkles,
-    items: ['Generate client-ready website preview concepts', 'Industry-specific layout and copy', 'Business-specific visuals and dynamic variations', 'Regenerate a preview and share its public link'],
-  },
-  {
-    title: 'Outreach Messages',
-    icon: Mail,
-    items: ['Generate personalized outreach', 'Edit the subject and body before sending', 'Copy a message for another channel', 'Use lead data, audit issues, SEO insights, and agency information'],
-  },
-  {
-    title: 'Email Sending / SMTP',
-    icon: Mail,
-    items: ['Connect your SMTP settings', 'Send a test email', 'Send edited outreach emails from Lead Detail', 'Emails are sent manually after review', 'SMTP passwords are stored encrypted'],
-  },
-  {
-    title: 'Email Outreach History',
-    icon: Mail,
-    items: ['Use the global Email Outreach page to track sent emails', 'View recipient, subject, lead, status, provider, and sent date', 'Review email history for a specific lead in Lead Detail'],
-  },
-  {
-    title: 'Plans and usage limits',
-    icon: CheckCircle2,
-    items: ['The Free Trial includes limited usage', 'Paid plans unlock higher limits', 'Choose a plan that fits your prospecting workflow'],
-  },
+const tableOfContents = [
+  ['getting-started', 'Getting started'], ['find-leads', 'How to find leads'], ['website-status', 'How to filter leads by website status'],
+  ['save-leads', 'How to save leads'], ['ai-audit', 'How to run an AI audit'], ['audit-scores', 'How to read audit scores'], ['seo-content', 'How to use SEO & content opportunities'],
+  ['share-report', 'How to create a shareable audit report'], ['website-preview', 'How to generate a website preview'],
+  ['outreach-messages', 'How to generate and edit outreach messages'], ['smtp', 'How to connect SMTP email settings'],
+  ['send-email', 'How to send outreach emails'], ['email-history', 'How to track sent emails'], ['best-practices', 'Best practices'], ['troubleshooting', 'Troubleshooting'],
 ] as const;
 
-const workflow = [
-  'Find local business leads', 'Filter by website status', 'Save the best opportunities', 'Run AI website audits', 'Generate SEO and content opportunities',
-  'Create shareable audit reports', 'Generate AI website preview links', 'Edit outreach messages', 'Send outreach emails', 'Track sent emails',
-];
+function StepList({ steps }: { steps: readonly string[] }) {
+  return <ol className="mt-5 grid gap-3">{steps.map((step, index) => <li key={step} className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm leading-relaxed text-slate-300"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-blue-500/15 text-xs font-bold text-blue-400">{index + 1}</span>{step}</li>)}</ol>;
+}
+
+function Guide({ id, title, icon: Icon, children }: { id: string; title: string; icon: typeof BookOpen; children: React.ReactNode }) {
+  return <article id={id} className="scroll-mt-24 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8"><div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/15 text-blue-400"><Icon className="h-5 w-5" /></span><h2 className="text-2xl font-bold text-white">{title}</h2></div>{children}</article>;
+}
+
+const copy = 'text-sm leading-relaxed text-slate-400';
+const bullet = 'flex gap-2.5 text-sm leading-relaxed text-slate-400';
 
 export function DocumentationPage({ onBack, onGetStarted, onLogin }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <SEO
-        title="LeadScope AI Documentation - Learn How LeadScope AI Works"
-        description="Learn how to use LeadScope AI for lead discovery, AI audits, website previews, outreach messages, SMTP email sending, and email outreach tracking."
-        canonicalPath="/docs"
-      />
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2.5 text-white font-bold text-lg">
-            <span className="w-8 h-8 rounded-lg bg-blue-600 grid place-items-center"><Crosshair className="w-4 h-4" /></span>
-            LeadScope <span className="text-blue-400">AI</span>
-          </button>
-          <div className="flex items-center gap-3">
-            <button onClick={onLogin} className="btn-secondary text-sm py-2">Sign In</button>
-            <button onClick={onGetStarted} className="btn-primary text-sm py-2">Get Started</button>
-          </div>
-        </div>
-      </header>
-
+      <SEO title="LeadScope AI Documentation - Step-by-Step User Guides" description="Step-by-step guides for finding, qualifying, auditing, saving, and reaching out to local business leads with LeadScope AI." canonicalPath="/docs" />
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6"><button onClick={onBack} className="flex items-center gap-2.5 text-lg font-bold text-white"><span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600"><Crosshair className="h-4 w-4" /></span>LeadScope <span className="text-blue-400">AI</span></button><div className="flex items-center gap-3"><button onClick={onLogin} className="btn-secondary py-2 text-sm">Sign In</button><button onClick={onGetStarted} className="btn-primary py-2 text-sm">Get Started</button></div></div></header>
       <main>
-        <section className="border-b border-slate-800 bg-gradient-to-b from-blue-950/30 to-slate-950">
-          <div className="max-w-5xl mx-auto px-6 py-20 sm:py-24 text-center">
-            <p className="text-blue-400 font-medium text-sm uppercase tracking-[0.2em] mb-4">Documentation</p>
-            <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">LeadScope AI Documentation</h1>
-            <p className="text-lg sm:text-xl text-slate-400 leading-relaxed max-w-3xl mx-auto mt-6">Learn how to use LeadScope AI to find leads, audit businesses, create client-ready reports, generate website previews, send outreach emails, and track your outreach activity.</p>
-          </div>
+        <section className="border-b border-slate-800 bg-gradient-to-b from-blue-950/30 to-slate-950"><div className="mx-auto max-w-5xl px-6 py-20 text-center sm:py-24"><p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-blue-400">Documentation</p><h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">LeadScope AI user guides</h1><p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-slate-400 sm:text-xl">A practical, step-by-step guide to finding local leads, qualifying opportunities, and sending thoughtful outreach.</p></div></section>
+        <section className="border-b border-slate-800 bg-slate-900/40"><div className="mx-auto max-w-5xl px-6 py-10"><h2 className="text-lg font-semibold text-white">On this page</h2><nav aria-label="Table of contents" className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{tableOfContents.map(([id, label]) => <a key={id} href={`#${id}`} className="rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-blue-400">{label}</a>)}</nav></div></section>
+        <section className="mx-auto max-w-5xl space-y-6 px-6 py-12">
+          <Guide id="getting-started" title="Getting Started" icon={BookOpen}><p className={copy}>LeadScope AI helps you move from finding local business leads to sending personalized outreach. Start with a search, identify the strongest opportunities, then use audits and previews to make each pitch more relevant.</p><StepList steps={['Create an account.', 'Choose a plan or start a free trial.', 'Open the dashboard.', 'Search for leads.', 'Audit and qualify opportunities.', 'Send outreach or save the best leads for later.']} /></Guide>
+          <Guide id="find-leads" title="How to Find Leads" icon={Search}><p className={copy}>LeadScope uses business data to help you discover local companies that may need SEO, website, or marketing help.</p><StepList steps={['Go to Lead Searches.', 'Enter a location, such as “Skopje,” “New York,” or “London.”', 'Enter a niche, such as “dentist,” “roofing contractor,” “restaurant,” or “nail salon.”', 'Choose a website status filter if needed.', 'Click Find Leads.', 'Wait while LeadScope collects matching businesses.', 'Review the results on the Leads page.']} /></Guide>
+          <Guide id="website-status" title="How Website Status Targeting Works" icon={Search}><p className={copy}>Use the website status filter to focus on businesses that match the service you want to offer.</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{[['All websites', 'Use when you want the widest possible set of local prospects.'], ['Has website', 'Good for SEO audits, redesigns, and conversion optimization.'], ['No website', 'Good for offering website creation to businesses without a site.'], ['Social-only website', 'Good for businesses relying on Facebook, Instagram, or similar pages.']].map(([name, description]) => <div key={name} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"><h3 className="font-semibold text-white">{name}</h3><p className="mt-2 text-sm leading-relaxed text-slate-400">{description}</p></div>)}</div></Guide>
+          <Guide id="save-leads" title="How to Save Leads" icon={BookOpen}><p className={copy}>Saved Leads helps you build a focused prospect list instead of repeating the same search and review work.</p><StepList steps={['Open the Leads page.', 'Find a business you want to keep.', 'Click Save Lead.', 'Use the Saved Leads filter to view saved leads only.', 'Open saved leads later for audits, previews, and outreach.']} /></Guide>
+          <Guide id="ai-audit" title="How to Run an AI Website Audit" icon={Sparkles}><p className={copy}>An audit gives you a structured starting point for qualifying a lead and preparing a useful, personalized pitch.</p><StepList steps={['Open a lead.', 'Click Analyze Website or Run Audit.', 'Wait for LeadScope to review the business website.', 'Review the scores and recommendations.']} /><p className="mt-5 text-sm font-medium text-slate-200">The audit also highlights main issues, a recommended offer, a personalization angle, and a concise summary you can use when planning outreach.</p></Guide>
+          <Guide id="audit-scores" title="How to Read Audit Scores" icon={Sparkles}><div className="grid gap-3 sm:grid-cols-3">{[['Website score', 'Use this as an overall view of the website experience.'], ['SEO score', 'Use this to identify search visibility and on-page improvement opportunities.'], ['Conversion score', 'Use this to spot ways the website could better turn visitors into enquiries.']].map(([name, description]) => <div key={name} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"><h3 className="font-semibold text-white">{name}</h3><p className="mt-2 text-sm leading-relaxed text-slate-400">{description}</p></div>)}</div><p className={`${copy} mt-5`}>Treat scores as a conversation starter, then read the issues and recommendations to decide which specific improvement is most relevant for that business.</p></Guide>
+          <Guide id="seo-content" title="How to Use SEO & Content Opportunities" icon={Sparkles}><p className={copy}>After an audit, LeadScope can suggest primary, local, service, and long-tail keywords; a meta title, meta description, and H1; service page, blog post, and Google Business post ideas; homepage copy; and a recommended service.</p><p className={`${copy} mt-4`}>Agencies can use these suggestions to prepare SEO proposals, build website improvement plans, create content ideas, and personalize outreach. Review the suggestions against the business before sharing them.</p></Guide>
+          <Guide id="share-report" title="How to Share an Audit Report" icon={BookOpen}><StepList steps={['Open a lead with an audit.', 'Click Share Audit.', 'Copy the public audit link.', 'Send the link to a prospect.', 'Choose a language if needed.']} /><p className={`${copy} mt-5`}>Public reports do not require a login. Internal pricing guidance is not shown to prospects.</p></Guide>
+          <Guide id="website-preview" title="How to Generate a Website Preview" icon={Sparkles}><StepList steps={['Open a lead.', 'Click Create Website Preview.', 'Wait for LeadScope to generate the preview.', 'Copy the website preview link.', 'Send the link to the prospect.', 'Regenerate the preview if needed.']} /><p className={`${copy} mt-5`}>Website previews help prospects see what a better website could look like before they commit.</p></Guide>
+          <Guide id="outreach-messages" title="How to Generate and Edit Outreach Messages" icon={Mail}><StepList steps={['Open a lead.', 'Go to Outreach.', 'Generate an outreach message.', 'Review the subject and body.', 'Edit the message if needed.', 'Copy it or send it by email.']} /><p className={`${copy} mt-5`}>Always review AI-generated outreach before sending so the message is accurate, specific, and appropriate for the recipient.</p></Guide>
+          <Guide id="smtp" title="How to Connect Email Sending" icon={Mail}><p className={copy}>You can connect SMTP settings to send outreach emails from your own email account. Your email provider supplies the details you need.</p><div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4"><h3 className="font-semibold text-white">Information to have ready</h3><p className={`${copy} mt-2`}>From Name, From Email, Reply-To Email, SMTP Host, SMTP Port, SMTP Username, SMTP Password or App Password, and secure connection preference.</p></div><p className={`${copy} mt-4`}>For many providers, port 465 usually uses secure connection on. Port 587 usually uses STARTTLS and secure connection off in LeadScope. Check your provider’s official SMTP settings for the correct values.</p><StepList steps={['Go to Settings.', 'Open Email / SMTP.', 'Enter the SMTP details from your email provider.', 'Save SMTP settings.', 'Send a test email.', 'If the test succeeds, use Send Email from Lead Detail.']} /></Guide>
+          <Guide id="send-email" title="How to Send an Outreach Email" icon={Mail}><StepList steps={['Open a lead.', 'Generate or select an outreach message.', 'Edit the subject and body.', 'Enter the recipient email.', 'Click Send Email.', 'Check Email Outreach history.']} /><p className={`${copy} mt-5`}>Emails are sent manually after your review. LeadScope does not auto-send outreach without user action.</p></Guide>
+          <Guide id="email-history" title="How to Track Sent Emails" icon={Mail}><p className={copy}>Track sent emails in two places: Lead Detail shows emails for one specific lead, while the Email Outreach page shows sent outreach emails across all leads.</p><p className={`${copy} mt-4`}>The history can show status, subject, recipient, sender, lead, sent date, and provider. Open tracking and click tracking may be added later; they are not current features.</p></Guide>
+          <Guide id="best-practices" title="Best Practices" icon={CheckCircle2}><ul className="grid gap-3 sm:grid-cols-2">{['Start with businesses that have weak or missing websites.', 'Use the audit before writing outreach.', 'Keep emails short and specific.', 'Personalize the first line.', 'Include the audit or website preview link.', 'Avoid bulk-spamming.', 'Follow local email laws and respect opt-outs.'].map(item => <li key={item} className={bullet}><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />{item}</li>)}</ul></Guide>
+          <Guide id="troubleshooting" title="Troubleshooting" icon={CheckCircle2}><div className="space-y-5">{[['Lead search returns few results', ['Try a broader niche.', 'Try a nearby city.', 'Remove the website status filter.']], ['Audit does not work', ['Make sure the lead has a valid website.', 'Try again later.']], ['Website preview looks wrong', ['Regenerate the preview.', 'Check that the business category is correct.']], ['SMTP test fails', ['Check SMTP host, port, username, and password.', 'Try port 465 with secure connection on.', 'Try port 587 with secure connection off.', 'Use the email provider’s official SMTP settings.']], ['Email sent but not visible in history', ['Refresh the page.', 'Try sending again.', 'Contact support if it continues.']]].map(([title, items]) => <div key={title as string}><h3 className="font-semibold text-white">{title as string}</h3><ul className="mt-2 space-y-1.5">{(items as string[]).map(item => <li key={item} className={bullet}><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />{item}</li>)}</ul></div>)}</div></Guide>
         </section>
-
-        <section className="max-w-5xl mx-auto px-6 py-16">
-          <div className="max-w-3xl">
-            <p className="text-blue-400 font-medium text-sm uppercase tracking-[0.2em] mb-3">Overview</p>
-            <h2 className="text-3xl font-bold text-white">Turn local opportunities into better pitches.</h2>
-            <p className="mt-5 text-slate-400 leading-relaxed">LeadScope AI is a lead generation and sales intelligence platform built for agencies, freelancers, web designers, SEO specialists, and marketing teams. It helps users find local business leads, understand their online presence, generate client-ready audit reports, create website preview concepts, and send better outreach.</p>
-          </div>
-        </section>
-
-        <section className="border-y border-slate-800 bg-slate-900/40">
-          <div className="max-w-5xl mx-auto px-6 py-16">
-            <p className="text-blue-400 font-medium text-sm uppercase tracking-[0.2em] mb-3">Lead-to-pitch workflow</p>
-            <h2 className="text-3xl font-bold text-white mb-8">A simple workflow from discovery to follow-up.</h2>
-            <ol className="grid sm:grid-cols-2 gap-3">
-              {workflow.map((step, index) => <li key={step} className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4"><span className="w-8 h-8 shrink-0 rounded-lg bg-blue-500/15 text-blue-400 grid place-items-center text-sm font-bold">{index + 1}</span><span className="text-sm font-medium text-slate-200">{step}</span></li>)}
-            </ol>
-          </div>
-        </section>
-
-        <section className="max-w-5xl mx-auto px-6 py-16">
-          <div className="grid md:grid-cols-2 gap-5">
-            {sections.map(({ title, icon: Icon, items }) => (
-              <article key={title} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-400 grid place-items-center mb-5"><Icon className="w-5 h-5" /></div>
-                <h2 className="text-xl font-semibold text-white">{title}</h2>
-                <ul className="mt-4 space-y-3">{items.map(item => <li key={item} className="flex gap-2.5 text-sm leading-relaxed text-slate-400"><CheckCircle2 className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />{item}</li>)}</ul>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="max-w-5xl mx-auto px-6 pb-20">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 sm:p-10 text-center">
-            <h2 className="text-2xl font-bold text-white">Need help getting started?</h2>
-            <p className="max-w-2xl mx-auto mt-3 text-slate-400">Contact the LeadScope AI team for help, or check the FAQ page for answers to common questions.</p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center mt-7"><button onClick={onGetStarted} className="btn-primary px-5 py-2.5">Start Free Trial <ArrowRight className="w-4 h-4" /></button><button onClick={onBack} className="btn-secondary px-5 py-2.5">Back to home</button></div>
-          </div>
-        </section>
+        <section className="mx-auto max-w-5xl px-6 pb-20"><div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 text-center sm:p-10"><h2 className="text-2xl font-bold text-white">Ready to start your next search?</h2><p className="mx-auto mt-3 max-w-2xl text-slate-400">Use these guides as a repeatable workflow: find a relevant lead, understand the opportunity, and send a considered message.</p><div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row"><button onClick={onGetStarted} className="btn-primary px-5 py-2.5">Start Free Trial <ArrowRight className="h-4 w-4" /></button><button onClick={onBack} className="btn-secondary px-5 py-2.5">Back to home</button></div></div></section>
       </main>
-
-      <footer className="border-t border-slate-800 py-8"><div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm"><button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-blue-400"><ChevronLeft className="w-4 h-4" /> Back to home</button><span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI. All rights reserved.</span></div></footer>
+      <footer className="border-t border-slate-800 py-8"><div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 text-sm sm:flex-row"><button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-blue-400"><ChevronLeft className="h-4 w-4" /> Back to home</button><span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI. All rights reserved.</span></div></footer>
     </div>
   );
 }
