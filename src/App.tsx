@@ -7,6 +7,7 @@ import { PricingPage } from './pages/PricingPage';
 import { FAQPage } from './pages/FAQPage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { AffiliatePage } from './pages/AffiliatePage';
+import { UpdatesPage } from './pages/UpdatesPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
@@ -34,6 +35,7 @@ type AppPage =
   | 'faq'
   | 'docs'
   | 'affiliate'
+  | 'updates'
   | 'change-password'
   | 'dashboard'
   | 'searches'
@@ -43,7 +45,7 @@ type AppPage =
   | 'settings'
   | 'admin';
 
-const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'docs', 'affiliate'];
+const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'docs', 'affiliate', 'updates'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'email-outreach', 'settings', 'change-password'];
 
@@ -125,6 +127,7 @@ function AppInner() {
       case '/pricing': return 'pricing';
       case '/faq': return 'faq';
       case '/docs': return 'docs';
+      case '/updates': return 'updates';
       case '/login': return 'login';
       case '/dashboard': return 'dashboard';
       case '/lead-searches': return 'searches';
@@ -153,7 +156,7 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
-    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'email-outreach' ? '/email-outreach' : null;
+    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'updates' ? '/updates' : p === 'email-outreach' ? '/email-outreach' : null;
     if (pagePath && window.location.pathname !== pagePath) {
       window.history.pushState({}, '', pagePath);
     }
@@ -298,6 +301,17 @@ function AppInner() {
     );
   }
 
+  if (page === 'updates') {
+    return (
+      <UpdatesPage
+        onBack={() => navigate('landing')}
+        onGetStarted={() => { setAuthMode('register'); navigate('register'); }}
+        onLogin={() => { setAuthMode('login'); navigate('login'); }}
+        onDocumentation={() => navigate('docs')}
+      />
+    );
+  }
+
   if (page === 'faq') {
     return (
       <FAQPage
@@ -339,6 +353,7 @@ function AppInner() {
         onAffiliate={() => navigate('affiliate')}
         onFAQ={() => navigate('faq')}
         onDocumentation={() => navigate('docs')}
+        onUpdates={() => navigate('updates')}
       />
     );
   }

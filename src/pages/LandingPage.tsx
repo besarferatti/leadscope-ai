@@ -8,6 +8,7 @@ interface Props {
   onAffiliate?: () => void;
   onFAQ?: () => void;
   onDocumentation?: () => void;
+  onUpdates?: () => void;
 }
 
 const softwareApplicationSchema = {
@@ -46,7 +47,7 @@ function CheckList({ items }: { items: string[] }) {
   </ul>;
 }
 
-export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onFAQ, onDocumentation }: Props) {
+export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onFAQ, onDocumentation, onUpdates }: Props) {
   const scrollToFeatures = () => document.getElementById('workflow')?.scrollIntoView({ behavior: 'smooth' });
 
   return (
@@ -109,7 +110,7 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onF
         <section className="max-w-7xl mx-auto px-6 pb-20"><div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 sm:p-12 text-center"><UserRoundCheck className="w-8 h-8 text-blue-400 mx-auto mb-5" /><h2 className="text-3xl font-bold text-white">Build a better lead-to-pitch process.</h2><p className="text-slate-400 max-w-xl mx-auto mt-4">Find local opportunities, produce useful sales assets, and give every prospect a clear next step.</p><div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><button onClick={onGetStarted} className="btn-primary px-6 py-3 text-base rounded-xl">Start Free Trial <ArrowRight className="w-5 h-5" /></button>{onPricing && <button onClick={onPricing} className="btn-secondary px-6 py-3 text-base rounded-xl">View pricing</button>}</div><p className="mt-6 text-sm text-slate-500">Questions before you start? {onFAQ && <button onClick={onFAQ} className="text-blue-400 hover:text-blue-300">Read the FAQ.</button>}</p></div></section>
       </main>
 
-      <footer className="border-t border-slate-800 py-8"><div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"><div className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-blue-600 grid place-items-center"><Crosshair className="w-3 h-3" /></span><span className="text-slate-400 text-sm font-medium">LeadScope AI</span></div><div className="flex items-center gap-4 text-sm">{onFAQ && <button onClick={onFAQ} className="text-slate-500 hover:text-blue-400">FAQ</button>}{onDocumentation && <button onClick={onDocumentation} className="text-slate-500 hover:text-blue-400">Documentation</button>}{onAffiliate && <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400">Affiliate Program</button>}<span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI.</span></div></div></footer>
+      <footer className="border-t border-slate-800 py-8"><div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"><div className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-blue-600 grid place-items-center"><Crosshair className="w-3 h-3" /></span><span className="text-slate-400 text-sm font-medium">LeadScope AI</span></div><div className="flex flex-wrap items-center justify-center gap-4 text-sm">{onFAQ && <button onClick={onFAQ} className="text-slate-500 hover:text-blue-400">FAQ</button>}{onDocumentation && <button onClick={onDocumentation} className="text-slate-500 hover:text-blue-400">Documentation</button>}{onUpdates && <a href="/updates" onClick={event => { event.preventDefault(); onUpdates(); }} className="text-slate-500 hover:text-blue-400">Product Updates</a>}{onAffiliate && <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400">Affiliate Program</button>}<span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI.</span></div></div></footer>
     </div>
   );
 }
