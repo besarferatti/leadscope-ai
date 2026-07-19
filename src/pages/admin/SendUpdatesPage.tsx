@@ -108,13 +108,13 @@ export function SendUpdatesPage() {
       const response = await fetch('/api/generate-social-image-package', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ updateId: updateId(selectedUpdate), platforms: regeneratePlatform ? [regeneratePlatform] : socialPlatformsSelected, regeneratePlatform: regeneratePlatform || null, regenerateCaption: captionsOnly }) });
       const data = await parseSocialApiResponse(response) as Partial<Record<Platform, SocialPost>> & { error?: string };
       if (!response.ok) throw new Error(data.error || 'Unable to generate social package.');
-      setSocialStatus('Applying LeadScope branding...');
+      if (!captionsOnly) setSocialStatus('Applying LeadScope branding...');
       setSocialPosts(current => {
         const next = { ...current };
         socialPlatforms.forEach(platform => { const post = data[platform]; if (post) next[platform] = { ...current[platform], ...post, channelId: current[platform]?.channelId || channels.find(channel => channel.platform === platform)?.id }; });
         return next;
       });
-      setSocialStatus('Images uploaded and ready for Buffer drafts.');
+      setSocialStatus(captionsOnly ? 'Caption regenerated successfully.' : regeneratePlatform ? 'Image regenerated successfully.' : 'Images uploaded and ready for Buffer drafts.');
     } catch (error) { setSocialError(error instanceof Error ? error.message : 'Unable to generate social package.'); }
     finally { setSocialLoading(false); }
   }
