@@ -102,6 +102,19 @@ export interface OutreachMessage {
   created_at: string;
 }
 
+export interface OutreachEmailSend {
+  id: string;
+  to_email: string;
+  from_email: string;
+  subject: string;
+  body: string;
+  status: 'sent' | 'failed';
+  error_message: string | null;
+  provider: string;
+  sent_at: string | null;
+  created_at: string;
+}
+
 export interface UserSettings {
   openai_api_key?: string;
   google_places_api_key?: string;
