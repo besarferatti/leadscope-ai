@@ -36,7 +36,14 @@ async function loadFonts(): Promise<Font[]> {
   return fontsPromise;
 }
 
-const h = (type: string, props: Record<string, unknown>, ...children: unknown[]) => ({ type, props: { ...props, children } });
+const h = (
+  type: string,
+  style: Record<string, unknown>,
+  ...children: unknown[]
+) => ({
+  type,
+  props: { style, children },
+});
 const words = (value: string) => value.trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
 export function shorten(value: string, maximum: number): string {
   if (value.length <= maximum) return value;
@@ -64,7 +71,7 @@ export async function renderSocialTextSvg(platform: SocialCardPlatform, content:
       h('div', { display: 'flex', width: 292, padding: '10px 14px', borderRadius: 18, backgroundColor: '#2563eb', fontSize: 18, fontWeight: 700, letterSpacing: 1.2 }, 'NEW IN LEADSCOPE AI'),
       text(title, { marginTop: 34, width: titleWidth, fontSize: titleSize, fontWeight: 700, lineHeight: 1.05, letterSpacing: -2.5 }),
       text(benefit, { marginTop: 26, width: 850, color: '#cbd5e1', fontSize: 29, lineHeight: 1.35 }),
-      h('div', { display: 'flex', flexDirection: 'column', gap: 16, marginTop: 46, width: 840 }, ...highlights.map((item, index) => h('div', { display: 'flex', alignItems: 'center', padding: '17px 20px', borderRadius: 20, backgroundColor: 'rgba(15,23,42,.75)', border: '1px solid rgba(147,197,253,.28)' }, h('div', { display: 'flex', width: 30, height: 30, borderRadius: 15, backgroundColor: index === 1 ? '#7c3aed' : '#2563eb', marginRight: 16 }), text(item, { fontSize: 24, fontWeight: 600, lineHeight: 1.25, color: '#e0e7ff' }))),
+      h('div', { display: 'flex', flexDirection: 'column', gap: 16, marginTop: 46, width: 840 }, ...highlights.map((item, index) => h('div', { display: 'flex', alignItems: 'center', padding: '17px 20px', borderRadius: 20, backgroundColor: 'rgba(15,23,42,.75)', border: '1px solid rgba(147,197,253,.28)' }, h('div', { display: 'flex', width: 30, height: 30, borderRadius: 15, backgroundColor: index === 1 ? '#7c3aed' : '#2563eb', marginRight: 16 }), text(item, { fontSize: 24, fontWeight: 600, lineHeight: 1.25, color: '#e0e7ff' })))),
       h('div', { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }, h('div', { display: 'flex', padding: '17px 25px', borderRadius: 15, backgroundColor: '#fff', color: '#0f172a', fontSize: 25, fontWeight: 700 }, 'Explore the update'), text('LeadScope AI  •  leadscope.pro', { fontSize: 21, fontWeight: 600, color: '#bfdbfe' }))
     )
     : h('div', { width, height, display: 'flex', flexDirection: 'column', padding: `${isX ? 66 : 54}px ${left}px`, fontFamily: 'Inter', color: '#fff' },
