@@ -26,21 +26,86 @@ export async function requireAdmin(req: ApiRequest, res: ApiResponse) {
   return { supabase, url };
 }
 
+type BufferGraphqlError = { message?: string };
+type BufferResponse = { data?: unknown; errors?: BufferGraphqlError[] };
+
+export type BufferOrganization = { id: string; name: string };
+export type BufferChannel = {
+  id: string;
+  name: string;
+  displayName: string;
+  service: string;
+  avatar: string | null;
+  organization: BufferOrganization;
+};
+
+function bufferOperation(query: string) {
+  return query.match(/\b(?:query|mutation)\s+(\w+)/)?.[1] || 'unnamed operation';
+}
+
 export async function buffer(query: string, variables?: Record<string, unknown>) {
   const key = process.env.BUFFER_API_KEY;
-  if (!key) throw new Error('Buffer is not configured. Add BUFFER_API_KEY in Vercel.');
-  const response = await fetch('https://api.buffer.com/graphql', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables }) });
-  if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'Buffer authorization failed.' : 'Buffer is unavailable.');
-  const body = await response.json() as { data?: unknown; errors?: Array<{ message?: string }> };
-  if (body.errors?.length) throw new Error('Buffer could not complete this request.');
+  if (!key) throw new Error('Buffer is not configured.');
+  const operation = bufferOperation(query);
+  let response: Response;
+  try {
+    response = await fetch('https://api.buffer.com', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables }) });
+  } catch {
+    console.error(`[Buffer] ${operation} request failed.`);
+    throw new Error('Buffer is unavailable.');
+  }
+  if (!response.ok) {
+    console.error(`[Buffer] ${operation} failed with HTTP ${response.status}.`);
+    throw new Error(response.status === 401 || response.status === 403 ? 'Buffer authorization failed.' : 'Buffer is unavailable.');
+  }
+  let body: BufferResponse;
+  try {
+    body = await response.json() as BufferResponse;
+  } catch {
+    console.error(`[Buffer] ${operation} returned an invalid JSON response.`);
+    throw new Error('Buffer is unavailable.');
+  }
+  if (body.errors?.length) {
+    console.error(`[Buffer] ${operation} returned ${body.errors.length} GraphQL error(s).`);
+    throw new Error('Buffer could not complete this request.');
+  }
   return body.data as Record<string, unknown>;
 }
 
+const organizationsQuery = `query GetOrganizations { account { organizations { id name } } }`;
+const channelsQuery = `query GetChannels($organizationId: OrganizationId!) { channels(input: { organizationId: $organizationId }) { id name displayName service avatar } }`;
+
+export async function getBufferOrganizationsAndChannels(): Promise<BufferChannel[]> {
+  const data = await buffer(organizationsQuery);
+  const organizations = ((data.account as { organizations?: unknown[] } | undefined)?.organizations || []) as Array<{ id?: unknown; name?: unknown }>;
+  const validOrganizations = organizations.flatMap(organization => {
+    const id = typeof organization.id === 'string' ? organization.id : '';
+    return id ? [{ id, name: typeof organization.name === 'string' ? organization.name : '' }] : [];
+  });
+  const channelGroups = await Promise.all(validOrganizations.map(async organization => {
+    const result = await buffer(channelsQuery, { organizationId: organization.id });
+    const channels = (result.channels || []) as Array<{ id?: unknown; name?: unknown; displayName?: unknown; service?: unknown; avatar?: unknown }>;
+    return channels.flatMap(channel => {
+      const id = typeof channel.id === 'string' ? channel.id : '';
+      const service = typeof channel.service === 'string' ? channel.service : '';
+      return id && service ? [{
+        id,
+        name: typeof channel.name === 'string' ? channel.name : '',
+        displayName: typeof channel.displayName === 'string' ? channel.displayName : '',
+        service,
+        avatar: typeof channel.avatar === 'string' ? channel.avatar : null,
+        organization,
+      }] : [];
+    });
+  }));
+  return [...new Map(channelGroups.flat().map(channel => [channel.id, channel])).values()];
+}
+
 export function platformForService(service: unknown): Platform | null {
-  const value = String(service || '').toLowerCase();
-  if (value.includes('linkedin')) return 'linkedin';
-  if (value === 'x' || value.includes('twitter')) return 'x';
-  if (value.includes('tiktok')) return 'tiktok';
+  const value = String(service || '').trim().toLowerCase().replace(/[._-]+/g, ' ').replace(/\s+/g, ' ');
+  if (value === 'linkedin' || value === 'linkedin page') return 'linkedin';
+  if (value === 'twitter' || value === 'x') return 'x';
+  if (value === 'tiktok') return 'tiktok';
   return null;
 }
 
