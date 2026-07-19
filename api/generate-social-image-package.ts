@@ -1,18 +1,10 @@
 import { productUpdates } from '../src/data/productUpdates.js';
 import { errorResponse, isTooLarge, PLATFORMS, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from './social-media-helpers.js';
+import { renderSocialTextSvg, socialCardChrome } from './social-card-renderer.js';
 
 type Captions = Record<Platform, { caption: string; title?: string }>;
 const UPDATE_URL = 'https://www.leadscope.pro/updates';
 const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const escapeSvg = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[character]!));
-const wrap = (value: string, limit: number, lines: number) => { const words = value.split(/\s+/); const result: string[] = ['']; for (const word of words) { const current = result[result.length - 1]; if (`${current} ${word}`.trim().length > limit && result.length < lines) result.push(word); else result[result.length - 1] = `${current} ${word}`.trim(); } return result.slice(0, lines); };
-
-function overlay(title: string, benefit: string, width: number, height: number) {
-  const margin = Math.round(width * 0.075), titleSize = Math.round(width * 0.055), benefitSize = Math.round(width * 0.026);
-  const titleLines = wrap(title, width > 1300 ? 31 : 25, 3), benefitLines = wrap(benefit, width > 1300 ? 58 : 42, 2);
-  const titleY = Math.round(height * 0.48);
-  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="rgba(2,6,23,.48)"/><rect x="${margin}" y="${margin}" width="${Math.round(width * .3)}" height="34" rx="17" fill="#2563eb"/><text x="${margin + 16}" y="${margin + 22}" fill="white" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1.3">NEW IN LEADSCOPE AI</text><g fill="white" font-family="Arial, sans-serif" font-weight="700">${titleLines.map((line, i) => `<text x="${margin}" y="${titleY + i * titleSize * 1.15}" font-size="${titleSize}">${escapeSvg(line)}</text>`).join('')}</g><g fill="#cbd5e1" font-family="Arial, sans-serif">${benefitLines.map((line, i) => `<text x="${margin}" y="${titleY + titleLines.length * titleSize * 1.25 + 34 + i * benefitSize * 1.35}" font-size="${benefitSize}">${escapeSvg(line)}</text>`).join('')}</g><text x="${margin}" y="${height - margin - 26}" fill="white" font-family="Arial, sans-serif" font-size="${Math.round(width * .026)}" font-weight="700">LeadScope AI</text><text x="${width - margin}" y="${height - margin - 26}" text-anchor="end" fill="#bfdbfe" font-family="Arial, sans-serif" font-size="${Math.round(width * .022)}">leadscope.pro</text></svg>`;
-}
 type CaptionObject = { caption?: unknown; title?: unknown };
 
 type CaptionResponse = Partial<Record<Platform, unknown>>;
@@ -69,7 +61,7 @@ All captions must include ${UPDATE_URL}. LinkedIn: 500 to 1,000 characters, prof
 async function artwork(update: typeof productUpdates[number], portrait: boolean) {
   const key = process.env.OPENAI_API_KEY!;
   const size = portrait ? '1024x1536' : '1536x1024';
-  const prompt = `Modern premium B2B SaaS artwork for ${update.description}. Dark navy background, blue and purple highlights, abstract lead generation analytics outreach and AI concepts, clean composition with generous negative space for a headline overlay. No text, no letters, no logos, no watermarks, no fake dashboard labels, no brand names. Avoid humanoid robots, generic handshakes, random binary code, and crypto-style visuals.`;
+  const prompt = `Modern premium B2B SaaS artwork for ${update.description}. Dark navy foundation with electric blue and subtle purple accents. Balanced composition: visual elements occupy approximately 55–70% of the canvas. Rich but clean SaaS interface-inspired artwork with layered analytics, lead discovery, and outreach concepts, polished depth and cinematic lighting. No large unused areas. No text, embedded words, letters, logos, watermarks, fake dashboard labels, or brand names. Avoid humanoid robots, generic handshakes, random binary code, and crypto-style visuals.`;
   const response = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2', prompt, size, quality: 'medium', output_format: 'png' }) });
   if (!response.ok) throw new Error('AI artwork generation was rejected or timed out. Please try again.');
   const payload = await response.json() as { data?: Array<{ b64_json?: string }> };
@@ -104,7 +96,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const dimensions = platform === 'linkedin' ? [1200, 627] : platform === 'x' ? [1600, 900] : [1080, 1920];
       const source = platform === 'tiktok' ? portrait : landscape;
       if (!source) throw new Error('AI artwork generation failed.');
-      const file = await sharp(source).resize(dimensions[0], dimensions[1], { fit: 'cover', position: 'centre' }).composite([{ input: Buffer.from(overlay(update.title, update.description, dimensions[0], dimensions[1])) }]).jpeg({ quality: 85 }).toBuffer();
+      const [width, height] = dimensions;
+      const textOverlay = await renderSocialTextSvg(platform, { title: update.title, benefit: update.description, highlights: update.highlights }, width, height);
+      const artworkFrame = platform === 'tiktok' ? { left: 70, top: 1058, width: 940, height: 524, radius: 28 } : platform === 'x' ? { left: 960, top: 90, width: 550, height: 720, radius: 25 } : { left: 736, top: 70, width: 392, height: 487, radius: 22 };
+      const mask = Buffer.from(`<svg width="${artworkFrame.width}" height="${artworkFrame.height}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" rx="${artworkFrame.radius}" fill="white"/></svg>`);
+      const [background, framedArtwork] = await Promise.all([
+        sharp(source).resize(width, height, { fit: 'cover', position: platform === 'tiktok' ? 'south' : 'east' }).modulate({ brightness: 0.42, saturation: 0.75 }).blur(5).jpeg({ quality: 88 }).toBuffer(),
+        sharp(source).resize(artworkFrame.width, artworkFrame.height, { fit: 'cover', position: 'centre' }).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer(),
+      ]);
+      const file = await sharp(background).composite([{ input: framedArtwork, left: artworkFrame.left, top: artworkFrame.top }, { input: socialCardChrome(platform, width, height) }, { input: textOverlay }]).jpeg({ quality: 89, chromaSubsampling: '4:4:4' }).toBuffer();
       if (file.length > 10 * 1024 * 1024) throw new Error('Generated image is too large to upload.');
       const path = `product-updates/${updateId}/${timestamp}/${platform}.jpg`;
       const { error } = await auth.supabase.storage.from('social-media-assets').upload(path, file, { contentType: 'image/jpeg', upsert: false });
