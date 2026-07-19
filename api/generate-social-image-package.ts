@@ -1,5 +1,5 @@
-import { productUpdates } from '../src/data/productUpdates';
-import { errorResponse, isTooLarge, PLATFORMS, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from './social-media-helpers';
+import { productUpdates } from '../src/data/productUpdates.js';
+import { errorResponse, isTooLarge, PLATFORMS, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from './social-media-helpers.js';
 
 type Captions = Record<Platform, { caption: string; title?: string }>;
 const UPDATE_URL = 'https://www.leadscope.pro/updates';
@@ -40,7 +40,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   res.setHeader('Allow', 'POST');
   if (req.method !== 'POST') return errorResponse(res, 'Method not allowed.', 405);
   if (isTooLarge(req)) return errorResponse(res, 'Request body is too large.', 413);
-  if (!await requireAdmin(req, res)) return;
+  const auth = await requireAdmin(req, res);
+  if (!auth) return;
   const body = (req.body || {}) as { updateId?: unknown; platforms?: unknown; regeneratePlatform?: unknown; regenerateCaption?: unknown };
   const updateId = safeText(body.updateId, 100); const requested = Array.isArray(body.platforms) ? body.platforms.filter((value): value is Platform => typeof value === 'string' && (PLATFORMS as readonly string[]).includes(value)) : [];
   const regenerate = typeof body.regeneratePlatform === 'string' && (PLATFORMS as readonly string[]).includes(body.regeneratePlatform) ? body.regeneratePlatform as Platform : null;
@@ -54,7 +55,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const needLandscape = targets.some(platform => platform === 'linkedin' || platform === 'x');
     const [landscape, portrait] = await Promise.all([needLandscape ? artwork(update, false) : Promise.resolve(null), targets.includes('tiktok') ? artwork(update, true) : Promise.resolve(null)]);
     const sharp = (await import('sharp')).default;
-    const auth = await requireAdmin(req, res); if (!auth) return;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const result: Record<string, unknown> = {};
     for (const platform of targets) {

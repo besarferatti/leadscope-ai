@@ -11,6 +11,16 @@ type SocialPost = { caption: string; imageUrl: string; width: number; height: nu
 const socialPlatforms: Platform[] = ['linkedin', 'x', 'tiktok'];
 const updateId = (update: ProductUpdate) => update.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+async function parseSocialApiResponse(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error('The server returned an invalid response. Check Vercel Function Logs.');
+  }
+}
+
 function composeBody(update: ProductUpdate) {
   return [
     'Hi there,',
@@ -70,7 +80,7 @@ export function SendUpdatesPage() {
   useEffect(() => {
     if (!session?.access_token) return;
     void fetch('/api/get-buffer-channels', { headers: { Authorization: `Bearer ${session.access_token}` } }).then(async response => {
-      const data = await response.json() as { channels?: BufferChannel[]; error?: string };
+      const data = await parseSocialApiResponse(response) as { channels?: BufferChannel[]; error?: string };
       if (!response.ok) throw new Error(data.error || 'Unable to load Buffer channels.');
       setChannels(data.channels || []);
     }).catch(error => setSocialError(error instanceof Error ? error.message : 'Unable to load Buffer channels.'));
@@ -96,7 +106,7 @@ export function SendUpdatesPage() {
     try {
       setSocialStatus(captionsOnly ? 'Generating captions...' : regeneratePlatform ? 'Generating AI artwork...' : 'Generating captions...');
       const response = await fetch('/api/generate-social-image-package', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ updateId: updateId(selectedUpdate), platforms: regeneratePlatform ? [regeneratePlatform] : socialPlatformsSelected, regeneratePlatform: regeneratePlatform || null, regenerateCaption: captionsOnly }) });
-      const data = await response.json() as Partial<Record<Platform, SocialPost>> & { error?: string };
+      const data = await parseSocialApiResponse(response) as Partial<Record<Platform, SocialPost>> & { error?: string };
       if (!response.ok) throw new Error(data.error || 'Unable to generate social package.');
       setSocialStatus('Applying LeadScope branding...');
       setSocialPosts(current => {
@@ -115,7 +125,7 @@ export function SendUpdatesPage() {
     setSocialLoading(true); setSocialError(''); setSocialStatus('Creating Buffer drafts...');
     try {
       const response = await fetch('/api/create-buffer-image-drafts', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ posts }) });
-      const data = await response.json() as { results?: Array<{ platform: Platform; success: boolean; error?: string }>; error?: string };
+      const data = await parseSocialApiResponse(response) as { results?: Array<{ platform: Platform; success: boolean; error?: string }>; error?: string };
       if (!response.ok) throw new Error(data.error || 'Unable to create Buffer drafts.');
       setSocialPosts(current => ({ ...current, ...Object.fromEntries((data.results || []).map(result => [result.platform, { ...current[result.platform], draft: result.success ? 'success' : 'error', error: result.error }])) }));
       const failures = data.results?.filter(result => !result.success).length || 0;
