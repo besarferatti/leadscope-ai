@@ -5,6 +5,7 @@ import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
 import { PricingPage } from './pages/PricingPage';
 import { FAQPage } from './pages/FAQPage';
+import { DocumentationPage } from './pages/DocumentationPage';
 import { AffiliatePage } from './pages/AffiliatePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -31,6 +32,7 @@ type AppPage =
   | 'register'
   | 'pricing'
   | 'faq'
+  | 'docs'
   | 'affiliate'
   | 'change-password'
   | 'dashboard'
@@ -41,7 +43,7 @@ type AppPage =
   | 'settings'
   | 'admin';
 
-const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'affiliate'];
+const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'docs', 'affiliate'];
 const ADMIN_PAGES: AppPage[] = ['admin'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'email-outreach', 'settings', 'change-password'];
 
@@ -122,6 +124,7 @@ function AppInner() {
       case '/': return 'landing';
       case '/pricing': return 'pricing';
       case '/faq': return 'faq';
+      case '/docs': return 'docs';
       case '/login': return 'login';
       case '/dashboard': return 'dashboard';
       case '/lead-searches': return 'searches';
@@ -150,7 +153,7 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
-    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'email-outreach' ? '/email-outreach' : null;
+    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'email-outreach' ? '/email-outreach' : null;
     if (pagePath && window.location.pathname !== pagePath) {
       window.history.pushState({}, '', pagePath);
     }
@@ -285,6 +288,16 @@ function AppInner() {
     );
   }
 
+  if (page === 'docs') {
+    return (
+      <DocumentationPage
+        onBack={() => navigate('landing')}
+        onGetStarted={() => { setAuthMode('register'); navigate('register'); }}
+        onLogin={() => { setAuthMode('login'); navigate('login'); }}
+      />
+    );
+  }
+
   if (page === 'faq') {
     return (
       <FAQPage
@@ -325,6 +338,7 @@ function AppInner() {
         onPricing={() => navigate('pricing')}
         onAffiliate={() => navigate('affiliate')}
         onFAQ={() => navigate('faq')}
+        onDocumentation={() => navigate('docs')}
       />
     );
   }
