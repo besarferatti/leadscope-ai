@@ -16,7 +16,7 @@ import {
 import { createCheckoutSession, createPortalSession } from '../lib/stripe';
 import type { SmtpSettings } from '../types';
 
-type Tab = 'profile' | 'api-keys' | 'smtp' | 'billing' | 'security';
+type Tab = 'profile' | 'api-keys' | 'smtp' | 'billing' | 'security' | 'email-preferences';
 
 interface ApiKeySettings {
   agency_name: string;
@@ -88,6 +88,8 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [portalLoading, setPortalLoading] = useState(false);
+  const [productUpdatesEnabled, setProductUpdatesEnabled] = useState(true);
+  const [emailPreferencesSaving, setEmailPreferencesSaving] = useState(false);
 
   const admin = isAdmin(profile);
   const limits = getPlanLimits(profile);
@@ -99,11 +101,15 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
 
   useEffect(() => {
     async function load() {
-      const [{ data: settingsData }, { data: smtpData }] = await Promise.all([
+      const [{ data: settingsData }, { data: smtpData }, { data: emailPreferencesData, error: emailPreferencesError }] = await Promise.all([
         supabase.from('user_settings').select('*').maybeSingle(),
         supabase
           .from('user_smtp_settings')
           .select('from_name, from_email, reply_to_email, smtp_host, smtp_port, smtp_username, smtp_secure, is_configured, updated_at')
+          .maybeSingle(),
+        supabase
+          .from('user_email_preferences')
+          .select('product_updates_enabled')
           .maybeSingle(),
       ]);
       const data = settingsData;
@@ -126,6 +132,16 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
           smtp_secure: smtpData.smtp_secure ?? true,
           is_configured: smtpData.is_configured ?? false,
           updated_at: smtpData.updated_at,
+        });
+      }
+      if (emailPreferencesData) {
+        setProductUpdatesEnabled(emailPreferencesData.product_updates_enabled);
+      } else if (!emailPreferencesError && user?.email) {
+        await supabase.from('user_email_preferences').insert({
+          user_id: user.id,
+          email: user.email,
+          product_updates_enabled: true,
+          unsubscribe_token: createUnsubscribeToken(),
         });
       }
       setFullName(profile?.full_name ?? '');
@@ -251,10 +267,46 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     setPortalLoading(false);
   }
 
+  function createUnsubscribeToken() {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function handleProductUpdatesChange(enabled: boolean) {
+    if (!user?.email) return;
+    setEmailPreferencesSaving(true);
+    setError('');
+    const now = new Date().toISOString();
+    const preference = {
+      user_id: user.id,
+      email: user.email,
+      product_updates_enabled: enabled,
+      unsubscribed_at: enabled ? null : now,
+      updated_at: now,
+    };
+    const { data: existingPreference, error: lookupError } = await supabase
+      .from('user_email_preferences')
+      .select('user_id')
+      .maybeSingle();
+    const { error: saveError } = lookupError
+      ? { error: lookupError }
+      : existingPreference
+        ? await supabase.from('user_email_preferences').update(preference).eq('user_id', user.id)
+        : await supabase.from('user_email_preferences').insert({ ...preference, unsubscribe_token: createUnsubscribeToken() });
+    if (saveError) {
+      setError(saveError.message);
+    } else {
+      setProductUpdatesEnabled(enabled);
+      showSaved(enabled ? 'Product update emails enabled.' : 'Product update emails disabled.');
+    }
+    setEmailPreferencesSaving(false);
+  }
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'api-keys', label: 'API Keys', icon: Key },
     { id: 'smtp', label: 'Email / SMTP', icon: Mail },
+    { id: 'email-preferences', label: 'Email Preferences', icon: Mail },
     { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'security', label: 'Security', icon: Shield },
   ];
@@ -452,6 +504,37 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
             </button>
           </div>
         </form>
+      )}
+
+      {tab === 'email-preferences' && (
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center">
+              <Mail className="w-4 h-4 text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-white font-semibold">Email Preferences</h2>
+              <p className="text-slate-500 text-xs mt-0.5">Choose whether to receive LeadScope AI product update emails.</p>
+            </div>
+          </div>
+          <div className="mt-6 flex items-center justify-between gap-5 rounded-xl border border-slate-800 bg-slate-800/40 p-4">
+            <div>
+              <p className="text-sm font-medium text-slate-200">Receive product update emails</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">Learn about new LeadScope AI features and improvements.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={productUpdatesEnabled}
+              aria-label="Receive product update emails"
+              disabled={emailPreferencesSaving}
+              onClick={() => handleProductUpdatesChange(!productUpdatesEnabled)}
+              className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${productUpdatesEnabled ? 'bg-blue-600' : 'bg-slate-600'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${productUpdatesEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        </div>
       )}
 
       {tab === 'billing' && (

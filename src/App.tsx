@@ -8,6 +8,7 @@ import { FAQPage } from './pages/FAQPage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { AffiliatePage } from './pages/AffiliatePage';
 import { UpdatesPage } from './pages/UpdatesPage';
+import { UnsubscribePage } from './pages/UnsubscribePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
@@ -149,6 +150,7 @@ function AppInner() {
   const [activatingPlan, setActivatingPlan] = useState(false);
   const shareMatch = window.location.pathname.match(/^\/audit\/share\/([^/]+)$/);
   const previewMatch = window.location.pathname.match(/^\/preview\/([^/]+)$/);
+  const unsubscribeMatch = window.location.pathname.match(/^\/unsubscribe\/([^/]+)$/);
 
   function getPagePath(p: AppPage, params: Record<string, string> = {}) {
     const query = new URLSearchParams(params).toString();
@@ -263,6 +265,10 @@ function AppInner() {
 
   if (previewMatch) {
     return <><SEO noindex canonicalPath={window.location.pathname} /><WebsitePreviewPage token={decodeURIComponent(previewMatch[1])} /></>;
+  }
+
+  if (unsubscribeMatch) {
+    return <><SEO noindex canonicalPath={window.location.pathname} /><UnsubscribePage token={decodeURIComponent(unsubscribeMatch[1])} /></>;
   }
 
   if (loading) {
@@ -443,7 +449,7 @@ function AppInner() {
       case 'lead-detail':
         return <LeadDetailPage leadId={pageParams.id} onBack={() => navigate('leads')} onNavigate={navigate} />;
       case 'settings':
-        return <SettingsPage onNavigate={navigate} initialTab={pageParams.tab as 'profile' | 'api-keys' | 'billing' | 'security' | undefined} />;
+        return <SettingsPage onNavigate={navigate} initialTab={pageParams.tab as 'profile' | 'api-keys' | 'smtp' | 'billing' | 'security' | 'email-preferences' | undefined} />;
       default:
         return <DashboardPage onNavigate={navigate} />;
     }
