@@ -34,6 +34,12 @@ export interface Lead {
   website: string;
   phone: string;
   email: string;
+  email_source_url?: string | null;
+  email_source_type?: 'website_mailto' | 'website_text' | 'website_jsonld' | null;
+  email_confidence?: number | null;
+  email_status?: 'unverified' | 'not_found' | 'error' | null;
+  email_found_at?: string | null;
+  email_candidates?: Array<{ email: string; source_url: string; source_type: string; confidence: number }> | null;
   google_rating: number | null;
   reviews_count: number;
   google_maps_url: string;
