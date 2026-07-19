@@ -1,11 +1,31 @@
 export interface ProductUpdate {
   title: string;
   description: string;
+  detailedDescription?: string;
+  category?: string;
+  date?: string;
   highlights: string[];
 }
 
 // Product updates are intentionally curated and published manually.
 export const productUpdates: ProductUpdate[] = [
+  {
+    title: 'Lead Email Finder',
+    description: 'Find public business emails directly from a lead’s website.',
+    detailedDescription: 'LeadScope AI can now search a lead’s website for publicly available business email addresses. The system checks the homepage and relevant pages such as Contact, About, Team, Support, and Impressum, then ranks the available email candidates and saves the strongest result.',
+    category: 'Lead Discovery',
+    date: '2026-07-19',
+    highlights: [
+      'Find business emails directly from Lead Detail.',
+      'Searches mailto links, visible website text, and structured website data.',
+      'Checks relevant internal pages such as Contact, About, Team, and Support.',
+      'Saves the email source and confidence score.',
+      'Shows all discovered email candidates.',
+      'Marks discovered emails as Unverified before outreach.',
+      'Protects users from unsafe or private network URLs during website scanning.',
+      'Does not automatically send an email after discovery.',
+    ],
+  },
   {
     title: 'Email Outreach',
     description: 'Track outreach emails sent from LeadScope AI in one central place.',
