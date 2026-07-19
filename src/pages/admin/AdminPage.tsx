@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, Database, Search, FileText,
-  MessageSquare, Settings, LogOut, ChevronRight, Crosshair, Shield, X, Menu, Handshake,
+  MessageSquare, Settings, LogOut, ChevronRight, Crosshair, Shield, X, Menu, Handshake, Send,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AdminOverview } from './AdminOverview';
@@ -13,6 +13,7 @@ import { AdminAudits } from './AdminAudits';
 import { AdminMessages } from './AdminMessages';
 import { AdminSystem } from './AdminSystem';
 import { AdminAffiliates } from './AdminAffiliates';
+import { SendUpdatesPage } from './SendUpdatesPage';
 
 type AdminSection =
   | 'overview'
@@ -23,7 +24,8 @@ type AdminSection =
   | 'audits'
   | 'messages'
   | 'affiliates'
-  | 'system';
+  | 'system'
+  | 'send-updates';
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
@@ -40,12 +42,15 @@ const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] =
   { id: 'messages', label: 'Outreach Messages', icon: MessageSquare },
   { id: 'affiliates', label: 'Affiliates', icon: Handshake },
   { id: 'system', label: 'System Settings', icon: Settings },
+  { id: 'send-updates', label: 'Send Updates', icon: Send },
 ];
 
 export function AdminPage({ onNavigate, adminPage }: Props) {
   const { user, signOut } = useAuth();
   const [section, setSection] = useState<AdminSection>((adminPage as AdminSection) ?? 'overview');
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => { setSection((adminPage as AdminSection) ?? 'overview'); }, [adminPage]);
 
   function renderSection() {
     switch (section) {
@@ -58,6 +63,7 @@ export function AdminPage({ onNavigate, adminPage }: Props) {
       case 'messages': return <AdminMessages />;
       case 'affiliates': return <AdminAffiliates />;
       case 'system': return <AdminSystem />;
+      case 'send-updates': return <SendUpdatesPage />;
       default: return <AdminOverview />;
     }
   }
@@ -88,7 +94,7 @@ export function AdminPage({ onNavigate, adminPage }: Props) {
           return (
             <button
               key={item.id}
-              onClick={() => { setSection(item.id); setMobileOpen(false); }}
+              onClick={() => { setSection(item.id); setMobileOpen(false); if (item.id === 'send-updates') onNavigate('admin-send-updates'); else if (window.location.pathname !== '/admin') onNavigate('admin'); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}

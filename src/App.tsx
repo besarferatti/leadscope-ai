@@ -43,10 +43,11 @@ type AppPage =
   | 'email-outreach'
   | 'lead-detail'
   | 'settings'
-  | 'admin';
+  | 'admin'
+  | 'admin-send-updates';
 
 const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'docs', 'affiliate', 'updates'];
-const ADMIN_PAGES: AppPage[] = ['admin'];
+const ADMIN_PAGES: AppPage[] = ['admin', 'admin-send-updates'];
 const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'email-outreach', 'settings', 'change-password'];
 
 function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
@@ -135,6 +136,7 @@ function AppInner() {
       case '/email-outreach': return 'email-outreach';
       case '/settings': return 'settings';
       case '/admin': return 'admin';
+      case '/admin/send-updates': return 'admin-send-updates';
       default: return 'landing';
     }
   });
@@ -156,7 +158,7 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
-    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'updates' ? '/updates' : p === 'email-outreach' ? '/email-outreach' : null;
+    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'updates' ? '/updates' : p === 'email-outreach' ? '/email-outreach' : p === 'admin' ? '/admin' : p === 'admin-send-updates' ? '/admin/send-updates' : null;
     if (pagePath && window.location.pathname !== pagePath) {
       window.history.pushState({}, '', pagePath);
     }
@@ -408,7 +410,7 @@ function AppInner() {
     }
 
     if (profile?.role === 'admin') {
-      return <><SEO noindex canonicalPath="/admin" /><AdminPage onNavigate={navigate} adminPage={pageParams.admin_page ?? 'overview'} /></>;
+      return <><SEO noindex canonicalPath={page === 'admin-send-updates' ? '/admin/send-updates' : '/admin'} /><AdminPage onNavigate={navigate} adminPage={page === 'admin-send-updates' ? 'send-updates' : pageParams.admin_page ?? 'overview'} /></>;
     }
 
     return <><SEO noindex canonicalPath="/admin" /><DashboardPage onNavigate={navigate} /></>;
