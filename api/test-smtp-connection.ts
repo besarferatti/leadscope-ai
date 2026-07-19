@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 
 type ApiRequest = {
   method?: string;
-  headers: { authorization?: string | string[] };
+  headers: { authorization?: string | string[]; Authorization?: string | string[] };
 };
 
 type ApiResponse = {
@@ -35,11 +35,6 @@ type SmtpDebugDetails = {
 
 function errorResponse(res: ApiResponse, message: string, status = 400, debug?: SmtpDebugDetails) {
   return res.status(status).json({ error: message, ...(debug ? { debug } : {}) });
-}
-
-function getBearerToken(authorization: string | string[] | undefined) {
-  const value = Array.isArray(authorization) ? authorization[0] : authorization;
-  return value?.startsWith('Bearer ') ? value : null;
 }
 
 function decryptPassword(encryptedPassword: string, encryptionKey: string) {
@@ -115,9 +110,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return errorResponse(res, 'Method not allowed.', 405);
   }
 
-  const authorization = getBearerToken(req.headers.authorization);
-  if (!authorization) {
-    return errorResponse(res, 'Missing Authorization Bearer token.', 401);
+  const rawAuthHeader =
+    req.headers.authorization ||
+    req.headers.Authorization;
+  const authHeader = Array.isArray(rawAuthHeader)
+    ? rawAuthHeader[0]
+    : rawAuthHeader;
+
+  if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {
+    return res.status(401).json({
+      error: 'Unauthorized: missing bearer token',
+      hasAuthorizationHeader: Boolean(authHeader),
+    });
+  }
+
+  const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!accessToken) {
+    return res.status(401).json({
+      error: 'Unauthorized: empty bearer token',
+      hasAuthorizationHeader: true,
+      hasToken: false,
+    });
   }
 
   const supabaseUrl =
@@ -142,15 +156,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return errorResponse(res, 'Missing SMTP_ENCRYPTION_KEY', 500);
   }
 
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authorization } },
+  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
   });
-  const { data: { user }, error: userError } = await userClient.auth.getUser();
+  const { data: { user }, error: userError } = await authClient.auth.getUser(accessToken);
   if (userError || !user) {
-    return errorResponse(res, 'Unauthorized.', 401);
+    return res.status(401).json({
+      error: 'Unauthorized: invalid Supabase session',
+      hasAuthorizationHeader: true,
+      hasToken: true,
+      authError: userError?.message || null,
+    });
   }
 
-  const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const serviceClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
   const { data: settings, error: settingsError } = await serviceClient
     .from('user_smtp_settings')
     .select('from_name, from_email, reply_to_email, smtp_host, smtp_port, smtp_username, smtp_password_encrypted, smtp_secure, is_configured')
