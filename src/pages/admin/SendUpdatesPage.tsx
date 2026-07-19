@@ -33,6 +33,12 @@ export function SendUpdatesPage() {
   const [showPreview, setShowPreview] = useState(true);
   const [fromEmail, setFromEmail] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [testSent, setTestSent] = useState(false);
+  const [eligibleCount, setEligibleCount] = useState<number | null>(null);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [campaignStatus, setCampaignStatus] = useState<'draft' | 'test_sent' | 'sending' | 'sent' | 'failed'>('draft');
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const selectedUpdate = selectedIndex === null ? null : productUpdates[selectedIndex];
   const formattedBody = useMemo(() => body.split('\n'), [body]);
@@ -44,13 +50,65 @@ export function SendUpdatesPage() {
     });
   }, [user?.id]);
 
+  useEffect(() => {
+    void loadRecipientCount();
+  // Recipient eligibility is recomputed whenever the selected, tested content changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex, session?.access_token]);
+
   function selectUpdate(update: ProductUpdate, index: number) {
     setSelectedIndex(index);
     setSubject(`New in LeadScope AI: ${update.title}`);
     setBody(composeBody(update));
     setCampaignId(null);
+    setTestSent(false);
+    setEligibleCount(null);
+    setCampaignStatus('draft');
+    setSendResult(null);
     setMessage(null);
     setShowPreview(true);
+  }
+
+  async function loadRecipientCount() {
+    if (!selectedUpdate || !session?.access_token || !subject.trim() || !body.trim()) return;
+    setLoadingRecipients(true);
+    try {
+      const response = await fetch('/api/send-product-update-campaign', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ update_id: selectedUpdate.title, subject, body, preview: true }),
+      });
+      const result = await response.json() as { success?: boolean; eligible_count?: number };
+      if (response.ok && result.success) setEligibleCount(result.eligible_count ?? 0);
+    } finally {
+      setLoadingRecipients(false);
+    }
+  }
+
+  async function sendCampaign() {
+    if (!selectedUpdate || !session?.access_token || !campaignId || !testSent || !subject.trim() || !body.trim()) return;
+    setSending(true);
+    setCampaignStatus('sending');
+    setMessage(null);
+    try {
+      const response = await fetch('/api/send-product-update-campaign', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id: campaignId, update_id: selectedUpdate.title, subject, body }),
+      });
+      const result = await response.json() as { success?: boolean; sent_count?: number; failed_count?: number; skipped_count?: number; status?: 'sent' | 'failed'; error?: string };
+      if (!response.ok || !result.success) throw new Error(result.error || 'Unable to send campaign.');
+      const counts = { sent: result.sent_count ?? 0, failed: result.failed_count ?? 0, skipped: result.skipped_count ?? 0 };
+      setSendResult(counts);
+      setCampaignStatus(result.status ?? 'sent');
+      setMessage({ type: 'success', text: `Campaign complete: ${counts.sent} sent, ${counts.failed} failed, ${counts.skipped} skipped.` });
+    } catch (error) {
+      setCampaignStatus('failed');
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to send campaign.' });
+    } finally {
+      setSending(false);
+      setShowConfirm(false);
+    }
   }
 
   async function sendTestEmail() {
@@ -66,6 +124,8 @@ export function SendUpdatesPage() {
       const result = await response.json() as { success?: boolean; campaign_id?: string; error?: string };
       if (!response.ok || !result.success) throw new Error(result.error || 'Unable to send test email.');
       setCampaignId(result.campaign_id ?? campaignId);
+      setTestSent(true);
+      setCampaignStatus('test_sent');
       setMessage({ type: 'success', text: `Test email sent to ${user?.email ?? 'your admin email'}.` });
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to send test email.' });
@@ -98,13 +158,15 @@ export function SendUpdatesPage() {
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
           <h2 className="text-lg font-semibold text-white">Email composer</h2>
           <p className="mt-1 text-sm text-slate-400">A test email is sent only to your own admin account email.</p>
-          <label className="mt-5 block text-sm font-medium text-slate-300">Subject<input value={subject} onChange={event => setSubject(event.target.value)} className="mt-2 input w-full" /></label>
-          <label className="mt-5 block text-sm font-medium text-slate-300">Body<textarea value={body} onChange={event => setBody(event.target.value)} rows={18} className="mt-2 input w-full resize-y font-mono text-xs leading-relaxed" /></label>
+          <label className="mt-5 block text-sm font-medium text-slate-300">Subject<input value={subject} onChange={event => { setSubject(event.target.value); setTestSent(false); setCampaignStatus('draft'); }} className="mt-2 input w-full" /></label>
+          <label className="mt-5 block text-sm font-medium text-slate-300">Body<textarea value={body} onChange={event => { setBody(event.target.value); setTestSent(false); setCampaignStatus('draft'); }} rows={18} className="mt-2 input w-full resize-y font-mono text-xs leading-relaxed" /></label>
           {message && <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${message.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>{message.text}</div>}
-          <div className="mt-5 flex flex-wrap gap-3"><button onClick={() => setShowPreview(value => !value)} className="btn-secondary flex items-center gap-2"><Eye className="h-4 w-4" />{showPreview ? 'Hide Preview' : 'Preview'}</button><button onClick={sendTestEmail} disabled={sending || !subject.trim() || !body.trim()} className="btn-primary flex items-center gap-2 disabled:opacity-60"><>{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</>Send Test Email</button></div>
+          <div className="mt-5 rounded-lg border border-slate-800 bg-slate-950/50 p-4 text-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-slate-200">Registered recipients</p><p className="mt-1 text-slate-400">{loadingRecipients ? 'Calculating eligible recipients…' : `${eligibleCount ?? 0} eligible recipients`}</p></div><span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium capitalize text-slate-300">Campaign: {campaignStatus.replace('_', ' ')}</span></div>{sendResult && <p className="mt-3 text-slate-300">Sent: {sendResult.sent} · Failed: {sendResult.failed} · Skipped: {sendResult.skipped}</p>}</div>
+          <div className="mt-5 flex flex-wrap gap-3"><button onClick={() => setShowPreview(value => !value)} className="btn-secondary flex items-center gap-2"><Eye className="h-4 w-4" />{showPreview ? 'Hide Preview' : 'Preview'}</button><button onClick={sendTestEmail} disabled={sending || !subject.trim() || !body.trim()} className="btn-primary flex items-center gap-2 disabled:opacity-60"><>{sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</>Send Test Email</button><button onClick={() => setShowConfirm(true)} disabled={sending || !testSent || !campaignId || !subject.trim() || !body.trim() || !eligibleCount} className="btn-primary flex items-center gap-2 disabled:opacity-60"><Send className="h-4 w-4" />Send to registered users</button></div>
         </div>
         {showPreview && <aside className="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><h2 className="text-lg font-semibold text-white">Email preview</h2><dl className="mt-5 space-y-3 text-sm"><div><dt className="text-slate-500">From</dt><dd className="mt-0.5 text-slate-200">{fromEmail ?? 'Your connected SMTP email'}</dd></div><div><dt className="text-slate-500">To</dt><dd className="mt-0.5 flex items-center gap-2 text-slate-200"><Mail className="h-3.5 w-3.5 text-blue-400" />{user?.email ?? 'Your admin account email'}</dd></div><div><dt className="text-slate-500">Subject</dt><dd className="mt-0.5 font-medium text-white">{subject}</dd></div></dl><div className="mt-5 rounded-lg border border-slate-700 bg-slate-950 p-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">{formattedBody.map((line, index) => <div key={`${line}-${index}`}>{line || '\u00a0'}</div>)}</div><p className="mt-4 border-t border-slate-800 pt-4 text-xs leading-relaxed text-slate-500">You are receiving this because you registered for LeadScope AI.<br />You can unsubscribe from product update emails at any time.</p></aside>}
       </section>}
+      {showConfirm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl"><h2 className="text-lg font-semibold text-white">Send product update?</h2><p className="mt-3 text-sm leading-relaxed text-slate-300">You are about to send this update to {eligibleCount ?? 0} registered users who are subscribed to product updates. This action cannot be undone.</p><div className="mt-6 flex justify-end gap-3"><button onClick={() => setShowConfirm(false)} disabled={sending} className="btn-secondary">Cancel</button><button onClick={sendCampaign} disabled={sending} className="btn-primary flex items-center gap-2">{sending && <Loader2 className="h-4 w-4 animate-spin" />}Confirm Send</button></div></div></div>}
     </div>
   );
 }
