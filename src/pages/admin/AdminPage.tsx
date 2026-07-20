@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Users, CreditCard, Database, Search, FileText,
-  MessageSquare, Settings, LogOut, ChevronRight, Crosshair, Shield, X, Menu, Handshake, Send,
+  MessageSquare, Settings, LogOut, ChevronRight, Shield, X, Menu, Handshake, Send,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AdminOverview } from './AdminOverview';
+import { BrandLogo } from '../../components/BrandLogo';
 import { AdminUsers } from './AdminUsers';
 import { AdminPlans } from './AdminPlans';
 import { AdminLeads } from './AdminLeads';
@@ -71,14 +72,8 @@ export function AdminPage({ onNavigate, adminPage }: Props) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-800">
-        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-          <Crosshair className="w-3.5 h-3.5 text-white" />
-        </div>
-        <div>
-          <span className="text-white font-bold text-sm">LeadScope</span>
-          <span className="text-blue-400 font-bold text-sm"> AI</span>
-        </div>
+      <div className="flex items-center px-5 py-4 border-b border-slate-800">
+        <BrandLogo variant="icon" className="h-7 w-7 object-contain" />
       </div>
 
       {/* Admin badge */}

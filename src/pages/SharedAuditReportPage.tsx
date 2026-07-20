@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { SharedAuditReport } from '../types';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { getScoreBg, getScoreColor } from '../lib/utils';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   token: string;
@@ -120,8 +121,11 @@ export function SharedAuditReportPage({ token }: Props) {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <main className="max-w-5xl mx-auto px-4 py-8 sm:py-12 space-y-8">
         <header className="rounded-3xl bg-slate-950 text-white p-6 sm:p-8 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-            <p className="text-blue-300 text-sm font-semibold uppercase tracking-widest">{t.eyebrow}</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+            <div className="space-y-3">
+              <BrandLogo className="h-7 w-auto object-contain" />
+              <p className="text-blue-300 text-sm font-semibold uppercase tracking-widest">{t.eyebrow}</p>
+            </div>
             <label className="flex items-center gap-2 text-xs text-slate-300">
               <Languages className="w-4 h-4" />
               <select

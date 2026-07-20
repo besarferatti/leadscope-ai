@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
-  Check, X, Zap, Crosshair, ChevronLeft, Star,
+  Check, X, Zap, ChevronLeft, Star,
 } from 'lucide-react';
 import { PLANS, PLAN_DISPLAY_ORDER, PlanId, BillingCycle } from '../lib/plans';
 import { trackEvent } from '../lib/analytics';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onGetStarted?: () => void;
@@ -151,12 +152,7 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
         <div className="max-w-6xl mx-auto">
           {/* Nav */}
           <div className="flex items-center justify-between mb-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                <Crosshair className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-white font-bold text-lg">LeadScope<span className="text-blue-400"> AI</span></span>
-            </div>
+            <BrandLogo />
             <div className="flex items-center gap-4">
               {onBack && (
                 <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">

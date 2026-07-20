@@ -8,6 +8,7 @@ import { FAQPage } from './pages/FAQPage';
 import { DocumentationPage } from './pages/DocumentationPage';
 import { AffiliatePage } from './pages/AffiliatePage';
 import { UpdatesPage } from './pages/UpdatesPage';
+import { BrandLogo } from './components/BrandLogo';
 import { UnsubscribePage } from './pages/UnsubscribePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -77,12 +78,7 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
   return (
     <><SEO noindex canonicalPath={window.location.pathname} /><div className="min-h-screen bg-slate-950 flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">L</span>
-          </div>
-          <span className="text-white font-bold">LeadScope<span className="text-blue-400"> AI</span></span>
-        </div>
+        <BrandLogo className="h-7 w-auto object-contain" />
         <button
           onClick={onDismiss}
           className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors"

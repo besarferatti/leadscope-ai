@@ -1,5 +1,6 @@
-import { ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Crosshair, Mail, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Mail, Search, Sparkles } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onBack: () => void;
@@ -30,7 +31,7 @@ export function DocumentationPage({ onBack, onGetStarted, onLogin }: Props) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <SEO title="LeadScope AI Documentation - Step-by-Step User Guides" description="Step-by-step guides for finding, qualifying, auditing, saving, and reaching out to local business leads with LeadScope AI." canonicalPath="/docs" />
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6"><button onClick={onBack} className="flex items-center gap-2.5 text-lg font-bold text-white"><span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600"><Crosshair className="h-4 w-4" /></span>LeadScope <span className="text-blue-400">AI</span></button><div className="flex items-center gap-3"><button onClick={onLogin} className="btn-secondary py-2 text-sm">Sign In</button><button onClick={onGetStarted} className="btn-primary py-2 text-sm">Get Started</button></div></div></header>
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6"><button onClick={onBack} aria-label="Back to LeadScope AI home"><BrandLogo /></button><div className="flex items-center gap-3"><button onClick={onLogin} className="btn-secondary py-2 text-sm">Sign In</button><button onClick={onGetStarted} className="btn-primary py-2 text-sm">Get Started</button></div></div></header>
       <main>
         <section className="border-b border-slate-800 bg-gradient-to-b from-blue-950/30 to-slate-950"><div className="mx-auto max-w-5xl px-6 py-20 text-center sm:py-24"><p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-blue-400">Documentation</p><h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">LeadScope AI user guides</h1><p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-slate-400 sm:text-xl">A practical, step-by-step guide to finding local leads, qualifying opportunities, and sending thoughtful outreach.</p></div></section>
         <section className="border-b border-slate-800 bg-slate-900/40"><div className="mx-auto max-w-5xl px-6 py-10"><h2 className="text-lg font-semibold text-white">On this page</h2><nav aria-label="Table of contents" className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{tableOfContents.map(([id, label]) => <a key={id} href={`#${id}`} className="rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-blue-400">{label}</a>)}</nav></div></section>
