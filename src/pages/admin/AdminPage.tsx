@@ -73,7 +73,7 @@ export function AdminPage({ onNavigate, adminPage }: Props) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center px-5 py-4 border-b border-slate-800">
-        <BrandLogo variant="icon" className="h-7 w-7 object-contain" />
+        <BrandLogo className="h-7 w-auto object-contain" />
       </div>
 
       {/* Admin badge */}
