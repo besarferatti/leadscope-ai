@@ -8,7 +8,7 @@ export function BrandLogo({ variant = 'full', className }: BrandLogoProps) {
 
   return (
     <img
-      src={isIcon ? '/brand/leadscope-icon.png' : '/brand/leadscope-logo.png'}
+      src={isIcon ? '/leadscope-icon.png' : '/leadscope-logo.png'}
       alt={isIcon ? '' : 'LeadScope AI'}
       aria-hidden={isIcon || undefined}
       className={className ?? (isIcon ? 'h-8 w-8 object-contain' : 'h-8 w-auto object-contain')}
