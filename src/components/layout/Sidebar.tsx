@@ -41,13 +41,14 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-          <Crosshair className="w-4 h-4 text-white" />
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
+        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+          <Crosshair className="w-4 h-4 text-slate-950" />
         </div>
         <div>
-          <span className="text-white font-bold text-base leading-none">LeadScope</span>
-          <span className="text-blue-400 font-bold text-base leading-none"> AI</span>
+          <span className="text-white font-semibold tracking-tight text-base leading-none">LeadScope</span>
+          <span className="text-blue-400 font-semibold text-base leading-none"> AI</span>
+          <span className="block text-[9px] uppercase tracking-[.2em] text-slate-500 mt-1">Prospecting suite</span>
         </div>
       </div>
 
@@ -70,7 +71,8 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-5 space-y-1">
+        <p className="px-3 pb-2 text-[10px] uppercase tracking-[.18em] text-slate-500">Workspace</p>
         {userNavItems.map(item => {
           const isActive = currentPage === item.page;
           return (
@@ -79,7 +81,7 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
               onClick={() => nav(item.page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
                 isActive
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-slate-950 shadow-lg shadow-emerald-950/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}
             >
@@ -93,7 +95,7 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
 
       {/* User info */}
       <div className="px-3 pb-4 border-t border-slate-800 pt-4 space-y-2">
-        <div className="px-3 py-2 rounded-lg bg-slate-900">
+        <div className="px-3 py-3 rounded-xl bg-slate-900 border border-slate-800">
           <div className="flex items-center gap-2 mb-1">
             <p className="text-slate-300 text-xs font-medium truncate flex-1">
               {profile?.full_name || user?.email?.split('@')[0] || 'User'}
@@ -137,7 +139,7 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+        className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-white shadow-xl shadow-black/30 transition-colors"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -146,14 +148,14 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
         <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setMobileOpen(false)} />
       )}
 
-      <aside className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 border-r border-slate-800 transform transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 bg-slate-950 border-r border-slate-800 shadow-2xl shadow-black/40 transform transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white">
           <X className="w-4 h-4" />
         </button>
         <SidebarContent />
       </aside>
 
-      <aside className="hidden lg:flex flex-col w-64 bg-slate-950 border-r border-slate-800 h-screen sticky top-0 flex-shrink-0">
+      <aside className="hidden lg:flex flex-col w-72 bg-slate-950/95 border-r border-slate-800 h-screen sticky top-0 flex-shrink-0">
         <SidebarContent />
       </aside>
     </>
