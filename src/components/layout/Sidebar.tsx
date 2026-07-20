@@ -43,7 +43,7 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-        <BrandLogo variant="icon" />
+        <BrandLogo className="h-8 w-auto object-contain" />
         <div>
           <span className="block text-[9px] uppercase tracking-[.2em] text-slate-500 mt-1">Prospecting suite</span>
         </div>
