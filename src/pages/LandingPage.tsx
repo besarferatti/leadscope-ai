@@ -1,5 +1,6 @@
-import { ArrowRight, Check, Crosshair, FileText, Globe2, Mail, Search, Sparkles, Target, UserRoundCheck } from 'lucide-react';
+import { ArrowRight, Check, FileText, Globe2, Mail, Search, Sparkles, Target, UserRoundCheck } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onGetStarted: () => void;
@@ -61,7 +62,7 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onF
       />
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-blue-600 grid place-items-center shadow-lg shadow-emerald-950/40"><Crosshair className="w-4 h-4 text-slate-950" /></span><span className="text-white font-semibold tracking-tight text-lg">LeadScope <span className="text-blue-400">AI</span></span></div>
+          <div className="flex items-center"><BrandLogo /></div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-slate-400">
             <button onClick={scrollToFeatures} className="hover:text-white">Features</button>
             {onPricing && <button onClick={onPricing} className="hover:text-white">Pricing</button>}
@@ -111,7 +112,7 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onF
         <section className="max-w-7xl mx-auto px-6 pb-20"><div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 sm:p-12 text-center"><UserRoundCheck className="w-8 h-8 text-blue-400 mx-auto mb-5" /><h2 className="font-display text-3xl font-bold text-white">Build a better lead-to-pitch process.</h2><p className="text-slate-400 max-w-xl mx-auto mt-4">Find local opportunities, produce useful sales assets, and give every prospect a clear next step.</p><div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><button onClick={onGetStarted} className="btn-primary px-6 py-3 text-base rounded-xl">Start Free Trial <ArrowRight className="w-5 h-5" /></button>{onPricing && <button onClick={onPricing} className="btn-secondary px-6 py-3 text-base rounded-xl">View pricing</button>}</div><p className="mt-6 text-sm text-slate-500">Questions before you start? {onFAQ && <button onClick={onFAQ} className="text-blue-400 hover:text-blue-300">Read the FAQ.</button>}</p></div></section>
       </main>
 
-      <footer className="border-t border-slate-800 py-8"><div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"><div className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-blue-600 grid place-items-center"><Crosshair className="w-3 h-3" /></span><span className="text-slate-400 text-sm font-medium">LeadScope AI</span></div><div className="flex flex-wrap items-center justify-center gap-4 text-sm">{onFAQ && <button onClick={onFAQ} className="text-slate-500 hover:text-blue-400">FAQ</button>}{onDocumentation && <button onClick={onDocumentation} className="text-slate-500 hover:text-blue-400">Documentation</button>}{onUpdates && <a href="/updates" onClick={event => { event.preventDefault(); onUpdates(); }} className="text-slate-500 hover:text-blue-400">Product Updates</a>}{onAffiliate && <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400">Affiliate Program</button>}<span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI.</span></div></div></footer>
+      <footer className="border-t border-slate-800 py-8"><div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4"><BrandLogo className="h-6 w-auto object-contain" /><div className="flex flex-wrap items-center justify-center gap-4 text-sm">{onFAQ && <button onClick={onFAQ} className="text-slate-500 hover:text-blue-400">FAQ</button>}{onDocumentation && <button onClick={onDocumentation} className="text-slate-500 hover:text-blue-400">Documentation</button>}{onUpdates && <a href="/updates" onClick={event => { event.preventDefault(); onUpdates(); }} className="text-slate-500 hover:text-blue-400">Product Updates</a>}{onAffiliate && <button onClick={onAffiliate} className="text-slate-500 hover:text-blue-400">Affiliate Program</button>}<span className="text-slate-600">© {new Date().getFullYear()} LeadScope AI.</span></div></div></footer>
     </div>
   );
 }

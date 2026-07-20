@@ -1,5 +1,6 @@
-import { ChevronLeft, Crosshair, Plus } from 'lucide-react';
+import { ChevronLeft, Plus } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onBack: () => void;
@@ -45,10 +46,7 @@ export function FAQPage({ onBack, onGetStarted, onLogin }: Props) {
       />
       <header className="border-b border-slate-800/60 bg-slate-950/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2.5 text-white font-bold text-lg">
-            <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><Crosshair className="w-4 h-4 text-white" /></span>
-            LeadScope <span className="text-blue-400">AI</span>
-          </button>
+          <button onClick={onBack} aria-label="Back to LeadScope AI home"><BrandLogo /></button>
           <div className="flex items-center gap-3">
             <button onClick={onLogin} className="btn-secondary text-sm py-2">Sign In</button>
             <button onClick={onGetStarted} className="btn-primary text-sm py-2">Get Started</button>

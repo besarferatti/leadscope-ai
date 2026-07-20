@@ -1,6 +1,7 @@
-import { ArrowLeft, Check, Crosshair, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, Sparkles } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { productUpdates } from '../data/productUpdates';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onBack: () => void;
@@ -20,10 +21,7 @@ export function UpdatesPage({ onBack, onGetStarted, onLogin, onDocumentation }: 
 
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <button onClick={onBack} className="flex items-center gap-2.5 text-lg font-bold text-white">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600"><Crosshair className="h-4 w-4" /></span>
-            LeadScope <span className="text-blue-400">AI</span>
-          </button>
+          <button onClick={onBack} aria-label="Back to LeadScope AI home"><BrandLogo /></button>
           <div className="flex items-center gap-3">
             <button onClick={onLogin} className="btn-secondary py-2 text-sm">Sign In</button>
             <button onClick={onGetStarted} className="btn-primary py-2 text-sm">Get Started</button>

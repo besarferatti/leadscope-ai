@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard, Search, Users, Settings, LogOut, Menu, X, Mail,
-  Crosshair, ChevronRight, Shield, TrendingUp,
+  ChevronRight, Shield, TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { isAdmin, getPlanBadgeColor, PLANS } from '../../lib/plans';
+import { BrandLogo } from '../BrandLogo';
 
 interface NavItem {
   label: string;
@@ -42,12 +43,8 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-emerald-950/40">
-          <Crosshair className="w-4 h-4 text-slate-950" />
-        </div>
+        <BrandLogo variant="icon" />
         <div>
-          <span className="text-white font-semibold tracking-tight text-base leading-none">LeadScope</span>
-          <span className="text-blue-400 font-semibold text-base leading-none"> AI</span>
           <span className="block text-[9px] uppercase tracking-[.2em] text-slate-500 mt-1">Prospecting suite</span>
         </div>
       </div>

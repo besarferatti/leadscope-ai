@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { BrandLogo } from '../components/BrandLogo';
 
 type Status = 'loading' | 'success' | 'invalid' | 'error';
 
@@ -45,10 +46,7 @@ export function UnsubscribePage({ token }: { token: string }) {
     <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <section className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl shadow-black/20">
         <div className="w-12 h-12 mx-auto mb-5 rounded-xl bg-slate-800 flex items-center justify-center">{content.icon}</div>
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center"><span className="text-white text-xs font-bold">L</span></div>
-          <span className="text-white font-bold">LeadScope<span className="text-blue-400"> AI</span></span>
-        </div>
+        <div className="mb-3 flex justify-center"><BrandLogo className="h-7 w-auto object-contain" /></div>
         <h1 className="text-xl font-semibold text-white">{content.title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-400">{content.message}</p>
       </section>

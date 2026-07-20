@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-  Eye, EyeOff, Crosshair, Mail, Lock, User, ArrowLeft, CheckCircle,
+  Eye, EyeOff, Mail, Lock, User, ArrowLeft, CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
+import { BrandLogo } from '../components/BrandLogo';
 import { trackEvent } from '../lib/analytics';
 import { getStoredReferralCode } from '../lib/referrals';
 
@@ -98,12 +99,7 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
-          <div className="flex items-center gap-3 mb-8 justify-center">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Crosshair className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-bold text-lg">LeadScope<span className="text-blue-400"> AI</span></span>
-          </div>
+          <div className="mb-8 flex justify-center"><BrandLogo /></div>
           <div className="card p-8">
             {forgotSent ? (
               <div className="text-center space-y-4">
@@ -151,12 +147,7 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
           <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Crosshair className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-white font-bold">LeadScope<span className="text-blue-400"> AI</span></span>
-          </div>
+          <BrandLogo className="h-7 w-auto object-contain" />
         </div>
 
         <div className="card p-8">

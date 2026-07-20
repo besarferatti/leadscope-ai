@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowLeft, CheckCircle, Crosshair, Loader2, Megaphone, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Megaphone, Users, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { trackEvent } from '../lib/analytics';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface Props {
   onBack: () => void;
@@ -57,12 +58,7 @@ export function AffiliatePage({ onBack, onLogin }: Props) {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800/60 bg-slate-950/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2.5 text-left">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Crosshair className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-bold text-lg">LeadScope <span className="text-blue-400">AI</span></span>
-          </button>
+          <button onClick={onBack} className="text-left" aria-label="Back to LeadScope AI home"><BrandLogo /></button>
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="text-slate-400 hover:text-slate-200 text-sm transition-colors">
               Home
