@@ -53,6 +53,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [emailFinding, setEmailFinding] = useState(false);
   const [emailFindMessage, setEmailFindMessage] = useState('');
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSaveError, setNoteSaveError] = useState('');
+  const [noteSaved, setNoteSaved] = useState(false);
   const seoPack = audit?.seo_content_pack;
 
   // Outreach form
@@ -86,6 +90,9 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     if (leadRes.error) setError(leadRes.error.message);
     else {
       setLead(leadRes.data);
+      setNoteDraft(leadRes.data?.notes ?? '');
+      setNoteSaveError('');
+      setNoteSaved(false);
       setRecipientEmail(current => current || leadRes.data?.email || '');
     }
     setAudit(auditRes.data ?? null);
@@ -306,6 +313,35 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     const { error } = await supabase.from('leads').update({ status }).eq('id', leadId);
     if (error) setError(error.message);
     else setLead(prev => prev ? { ...prev, status } : prev);
+  }
+
+  async function handleSaveNote() {
+    if (!lead || noteDraft === (lead.notes ?? '')) return;
+
+    setNoteSaving(true);
+    setNoteSaveError('');
+    setNoteSaved(false);
+    const notesUpdatedAt = new Date().toISOString();
+    const { data, error: updateError } = await supabase
+      .from('leads')
+      .update({ notes: noteDraft || null, notes_updated_at: notesUpdatedAt })
+      .eq('id', lead.id)
+      .select('notes, notes_updated_at')
+      .single();
+
+    if (updateError) {
+      setNoteSaveError(updateError.message);
+    } else {
+      setLead(current => current ? {
+        ...current,
+        notes: data.notes,
+        notes_updated_at: data.notes_updated_at,
+      } : current);
+      setNoteDraft(data.notes ?? '');
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2500);
+    }
+    setNoteSaving(false);
   }
 
   async function copyText(text: string, key: string) {
@@ -547,6 +583,47 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                 <span className="text-slate-500">Lead Score</span>
                 <span className={`font-bold ${getScoreColor(lead.lead_score)}`}>{lead.lead_score}/100</span>
               </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="card p-5">
+            <h2 className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Notes</h2>
+            <textarea
+              value={noteDraft}
+              onChange={event => {
+                setNoteDraft(event.target.value);
+                setNoteSaveError('');
+                setNoteSaved(false);
+              }}
+              maxLength={1000}
+              rows={4}
+              className="input resize-y"
+              placeholder="e.g. Contacted via WhatsApp, no reply yet..."
+              aria-label="Lead notes"
+            />
+            {lead.notes_updated_at && (
+              <p className="mt-2 text-xs text-slate-500">Last updated: {formatDate(lead.notes_updated_at)}</p>
+            )}
+            {noteSaveError && <p className="mt-2 text-xs text-red-400">{noteSaveError}</p>}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveNote}
+                disabled={noteSaving || noteDraft === (lead.notes ?? '')}
+                className="btn-primary text-xs py-2"
+              >
+                {noteSaving ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                ) : (
+                  'Save Note'
+                )}
+              </button>
+              {noteSaved && (
+                <span className="flex items-center gap-1 text-xs text-emerald-400" role="status">
+                  <Check className="w-3.5 h-3.5" /> Saved
+                </span>
+              )}
             </div>
           </div>
         </div>

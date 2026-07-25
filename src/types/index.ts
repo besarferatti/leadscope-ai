@@ -46,6 +46,8 @@ export interface Lead {
   lead_score: number;
   status: LeadStatus;
   saved_at?: string | null;
+  notes?: string | null;
+  notes_updated_at?: string | null;
   created_at: string;
 }
 
