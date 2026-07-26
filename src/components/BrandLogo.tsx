@@ -5,7 +5,7 @@ interface BrandLogoProps {
 export function BrandLogo({ className }: BrandLogoProps) {
   return (
     <img
-      src="/leadscope-logo.png"
+      src="/leadscope-icon.png"
       alt="LeadScope AI"
       className={className ?? 'h-8 w-auto object-contain'}
     />
