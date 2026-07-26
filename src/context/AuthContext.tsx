@@ -203,19 +203,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const previousUserId = userRef.current?.id ?? null;
+      const nextUser = nextSession?.user ?? null;
+      const nextUserId = nextUser?.id ?? null;
+
+      userRef.current = nextUser;
+
+      setSession(nextSession);
+      setUser(nextUser);
       setLoading(false);
 
-      if (session?.user) {
-        setTimeout(() => {
-          void loadProfile(session.user);
-        }, 0);
-      } else {
+      if (!nextUser) {
         setProfile(null);
         setProfileError(null);
         setProfileLoading(false);
+        return;
+      }
+
+      const userChanged = previousUserId !== nextUserId;
+      const profileNeedsRefresh =
+        userChanged ||
+        event === 'USER_UPDATED';
+
+      if (profileNeedsRefresh) {
+        setTimeout(() => {
+          void loadProfile(nextUser);
+        }, 0);
       }
     });
 

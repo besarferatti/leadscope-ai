@@ -380,7 +380,7 @@ function AppInner() {
     );
   }
 
-  if (profileLoading) {
+  if (profileLoading && !profile) {
     return <LoadingSpinner message="Loading account..." />;
   }
 
@@ -407,7 +407,7 @@ function AppInner() {
 
   // Admin route — only admins
   if (ADMIN_PAGES.includes(page)) {
-    if (profileLoading) {
+    if (profileLoading && !profile) {
       return <LoadingSpinner message="Loading account..." />;
     }
 
