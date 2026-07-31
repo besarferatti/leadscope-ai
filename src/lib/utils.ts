@@ -70,8 +70,10 @@ export function getStatusColor(status: LeadStatus | string): string {
     case 'Audited': return 'bg-blue-500/20 text-blue-400';
     case 'Message Generated': return 'bg-violet-500/20 text-violet-400';
     case 'Contacted': return 'bg-amber-500/20 text-amber-400';
+    case 'Contact Later': return 'bg-cyan-500/20 text-cyan-400';
     case 'Interested': return 'bg-emerald-500/20 text-emerald-400';
     case 'Not Interested': return 'bg-red-500/20 text-red-400';
+    case 'No Need': return 'bg-slate-500/20 text-slate-400';
     case 'Closed': return 'bg-green-500/20 text-green-400';
     default: return 'bg-slate-700 text-slate-300';
   }
@@ -135,8 +137,10 @@ export const LEAD_STATUSES: LeadStatus[] = [
   'Audited',
   'Message Generated',
   'Contacted',
+  'Contact Later',
   'Interested',
   'Not Interested',
+  'No Need',
   'Closed',
 ];
 
