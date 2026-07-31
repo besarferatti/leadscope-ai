@@ -3,8 +3,10 @@ export type LeadStatus =
   | 'Audited'
   | 'Message Generated'
   | 'Contacted'
+  | 'Contact Later'
   | 'Interested'
   | 'Not Interested'
+  | 'No Need'
   | 'Closed';
 
 export type SearchStatus = 'pending' | 'running' | 'completed';
