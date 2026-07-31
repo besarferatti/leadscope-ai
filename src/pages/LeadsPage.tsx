@@ -67,11 +67,33 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     loadData();
   }, []);
 
+  async function loadAllLeads() {
+    const pageSize = 1000;
+    const allLeads: Lead[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error: queryError } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (queryError) return { data: null, error: queryError };
+
+      const page = (data as Lead[] | null) ?? [];
+      allLeads.push(...page);
+
+      if (page.length < pageSize) break;
+    }
+
+    return { data: allLeads, error: null };
+  }
+
   async function loadData() {
     console.log('[LeadsPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
     const [leadsRes, searchesRes] = await Promise.all([
-      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      loadAllLeads(),
       supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
     ]);
     if (leadsRes.error) {
