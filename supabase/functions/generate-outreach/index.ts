@@ -135,27 +135,40 @@ Agency name: ${sender.agencyName || "missing"}
 Agency website: ${sender.agencyWebsite || "missing"}
 Phone: ${sender.phone || "missing"}
 Email: ${sender.email || "missing"}`;
-    const prompt = `You are a ${tone.toLowerCase()} outreach specialist for a digital marketing agency. Write a highly personalized cold ${channel} in ${language} for this prospect.
+    const prompt = `You write concise, human cold outreach for a digital agency. Write a ${tone.toLowerCase()} ${channel} in ${language} for this prospect.
 
-Business: ${typedLead.business_name}
-Industry: ${typedLead.industry}
-Location: ${typedLead.location}
-Website: ${typedLead.website || "no website"}
-Google Rating: ${typedLead.google_rating ?? "unknown"} (${typedLead.reviews_count} reviews)
+Prospect:
+- Business: ${typedLead.business_name}
+- Industry: ${typedLead.industry}
+- Location: ${typedLead.location}
+- Website: ${typedLead.website || "no website"}
+- Google rating: ${typedLead.google_rating ?? "unknown"} (${typedLead.reviews_count} reviews)
 ${auditContext}
 
 ${senderContext}
 
-Use the sender information in the signature. Do not use placeholder text. Do not write [Your Name], [Your Agency's Name], [Your Agency Name], [Your Position], [Your Phone Number], or [Your Email Address]. If a sender field is missing, omit that line instead of using a placeholder.
+Rules:
+- Sound like a real person who briefly researched the business, never like an AI-generated sales template.
+- Use only facts supplied above. Never invent a technical problem, result, relationship, compliment, or claim.
+- Mention at most ONE specific, high-confidence observation from the audit.
+- Do not dump audit findings, scores, technical checklists, pricing, deliverables, or a full proposal.
+- Focus on the business outcome, not technical jargon.
+- Keep the opening natural. Avoid "I hope this message finds you well", "I was impressed", and exaggerated praise.
+- Use one clear offer and ONE low-friction CTA.
+- Do not promise results.
+- Use the sender information in the signature. Never use placeholders. Omit missing sender fields.
+- No markdown, bold text, numbered lists, or bullet lists in the message.
 
-${channel === "email" ? "Write a cold email with a compelling subject line." : "Write a short DM (max 5 sentences)."}
+${channel === "email"
+  ? "Email requirements: 70-120 words before the signature, 3-5 short paragraphs, subject line of 3-7 words, and exactly one question."
+  : "DM requirements: 35-65 words before the sign-off, maximum 4 short sentences, empty subject, and exactly one question."}
 
 Return raw JSON only (no markdown):
 {
-  "subject": "<subject line${channel === "dm" ? " (use empty string for DM)" : ""}>",
-  "body": "<${channel === "email" ? "full email body with greeting, value proposition, soft CTA, and sign-off using only available sender information" : "short DM message ending with a sign-off using only available sender information"}>"
+  "subject": "<${channel === "dm" ? "empty string" : "short specific subject"}>",
+  "body": "<concise personalized message and sign-off using only available sender information>"
 }`;
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.8, max_tokens: 800 }) });
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.45, max_tokens: 450 }) });
     if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); return errorResponse((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`, 502); }
     const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
     const parsed = JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as OutreachPayload;
