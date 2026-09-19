@@ -29,6 +29,7 @@ type SmtpSettings = {
 type SendOutreachBody = {
   lead_id?: unknown;
   outreach_message_id?: unknown;
+  campaign_lead_id?: unknown;
   to_email?: unknown;
   subject?: unknown;
   body?: unknown;
@@ -80,6 +81,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const requestBody = (req.body ?? {}) as SendOutreachBody;
   const leadId = typeof requestBody.lead_id === 'string' ? requestBody.lead_id.trim() : '';
   const outreachMessageId = typeof requestBody.outreach_message_id === 'string' ? requestBody.outreach_message_id.trim() : '';
+  const campaignLeadId = typeof requestBody.campaign_lead_id === 'string' ? requestBody.campaign_lead_id.trim() : '';
   const toEmail = typeof requestBody.to_email === 'string' ? requestBody.to_email.trim() : '';
   const subject = typeof requestBody.subject === 'string' ? requestBody.subject.trim() : '';
   const body = typeof requestBody.body === 'string' ? requestBody.body.trim() : '';
@@ -102,11 +104,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const { data: lead, error: leadError } = await supabaseAdmin
     .from('leads')
-    .select('id, user_id')
+    .select('id, user_id, email')
     .eq('id', leadId)
     .eq('user_id', user.id)
     .maybeSingle();
   if (leadError || !lead) return errorResponse(res, 'Lead not found.', 404);
+  if (!lead.email || lead.email.trim().toLowerCase() !== toEmail.toLowerCase()) {
+    return errorResponse(res, 'Recipient must match the saved lead email.');
+  }
 
   if (outreachMessageId) {
     const { data: message } = await supabaseAdmin
@@ -116,6 +121,47 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       .eq('lead_id', leadId)
       .maybeSingle();
     if (!message) return errorResponse(res, 'Outreach message not found.', 404);
+  }
+
+  let campaignLead: { id: string; campaign_id: string; status: string } | null = null;
+  let campaign: { id: string; status: string; daily_limit: number } | null = null;
+  if (campaignLeadId) {
+    const { data: member } = await supabaseAdmin
+      .from('outreach_campaign_leads')
+      .select('id, campaign_id, lead_id, status, outreach_message_id')
+      .eq('id', campaignLeadId)
+      .eq('lead_id', leadId)
+      .eq('outreach_message_id', outreachMessageId)
+      .maybeSingle();
+    if (!member || member.status !== 'approved') return errorResponse(res, 'Campaign message is not approved.', 409);
+
+    const { data: ownerCampaign } = await supabaseAdmin
+      .from('outreach_campaigns')
+      .select('id, user_id, status, daily_limit')
+      .eq('id', member.campaign_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!ownerCampaign) return errorResponse(res, 'Campaign not found.', 404);
+    if (ownerCampaign.status !== 'active') return errorResponse(res, 'Activate the campaign before sending.', 409);
+    campaignLead = member;
+    campaign = ownerCampaign;
+
+    const { data: suppressionRows } = await supabaseAdmin
+      .from('outreach_suppression_list')
+      .select('id, email')
+      .eq('user_id', user.id)
+    const suppressed = (suppressionRows ?? []).some(row => row.email.trim().toLowerCase() === toEmail.toLowerCase());
+    if (suppressed) return errorResponse(res, 'This recipient is on the suppression list.', 409);
+
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const { count } = await supabaseAdmin
+      .from('outreach_email_sends')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'sent')
+      .gte('sent_at', startOfDay.toISOString());
+    if ((count ?? 0) >= ownerCampaign.daily_limit) return errorResponse(res, 'Daily campaign sending limit reached.', 429);
   }
 
   const { data: settings, error: settingsError } = await supabaseAdmin
@@ -172,6 +218,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (logError) return errorResponse(res, 'Email was sent, but the send log could not be saved.', 500);
 
     await supabaseAdmin.from('leads').update({ status: 'Contacted' }).eq('id', leadId).eq('user_id', user.id);
+    if (campaignLead && campaign) {
+      await supabaseAdmin.from('outreach_campaign_leads').update({
+        status: 'sent',
+        last_sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', campaignLead.id).eq('campaign_id', campaign.id);
+    }
     return res.status(200).json({ success: true });
   } catch (error) {
     const errorMessage = safeErrorMessage(error);
