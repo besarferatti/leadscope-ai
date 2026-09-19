@@ -15,6 +15,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { LeadSearchesPage } from './pages/LeadSearchesPage';
 import { LeadsPage } from './pages/LeadsPage';
 import { EmailOutreachPage } from './pages/EmailOutreachPage';
+import { CampaignsPage } from './pages/CampaignsPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
 import { SharedAuditReportPage } from './pages/SharedAuditReportPage';
 import { WebsitePreviewPage } from './pages/WebsitePreviewPage';
@@ -43,6 +44,7 @@ type AppPage =
   | 'searches'
   | 'leads'
   | 'email-outreach'
+  | 'campaigns'
   | 'lead-detail'
   | 'settings'
   | 'admin'
@@ -50,7 +52,7 @@ type AppPage =
 
 const PUBLIC_PAGES: AppPage[] = ['landing', 'login', 'register', 'pricing', 'faq', 'docs', 'affiliate', 'updates'];
 const ADMIN_PAGES: AppPage[] = ['admin', 'admin-send-updates'];
-const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'email-outreach', 'settings', 'change-password'];
+const DASH_PAGES: AppPage[] = ['dashboard', 'searches', 'leads', 'lead-detail', 'campaigns', 'email-outreach', 'settings', 'change-password'];
 
 function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
   const { profile } = useAuth();
@@ -131,6 +133,7 @@ function AppInner() {
       case '/lead-searches': return 'searches';
       case '/leads': return 'leads';
       case '/email-outreach': return 'email-outreach';
+      case '/campaigns': return 'campaigns';
       case '/settings': return 'settings';
       case '/admin': return 'admin';
       case '/admin/send-updates': return 'admin-send-updates';
@@ -156,7 +159,7 @@ function AppInner() {
   function navigate(p: string, params?: Record<string, string>) {
     setPage(p as AppPage);
     setPageParams(params ?? {});
-    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'updates' ? '/updates' : p === 'email-outreach' ? '/email-outreach' : p === 'admin' ? '/admin' : p === 'admin-send-updates' ? '/admin/send-updates' : null;
+    const pagePath = p === 'landing' ? '/' : p === 'pricing' ? '/pricing' : p === 'faq' ? '/faq' : p === 'docs' ? '/docs' : p === 'updates' ? '/updates' : p === 'campaigns' ? '/campaigns' : p === 'email-outreach' ? '/email-outreach' : p === 'admin' ? '/admin' : p === 'admin-send-updates' ? '/admin/send-updates' : null;
     if (pagePath && window.location.pathname !== pagePath) {
       window.history.pushState({}, '', pagePath);
     }
@@ -428,7 +431,7 @@ function AppInner() {
   }
 
   // Dashboard pages
-  const activePage = (['dashboard', 'searches', 'leads', 'email-outreach', 'settings'] as AppPage[]).includes(page)
+  const activePage = (['dashboard', 'searches', 'leads', 'campaigns', 'email-outreach', 'settings'] as AppPage[]).includes(page)
     ? page
     : page === 'lead-detail' ? 'leads' : 'dashboard';
 
@@ -442,6 +445,8 @@ function AppInner() {
         return <LeadsPage onNavigate={navigate} initialSearchId={pageParams.search_id} />;
       case 'email-outreach':
         return <EmailOutreachPage onNavigate={navigate} />;
+      case 'campaigns':
+        return <CampaignsPage />;
       case 'lead-detail':
         return <LeadDetailPage leadId={pageParams.id} onBack={() => navigate('leads')} onNavigate={navigate} />;
       case 'settings':

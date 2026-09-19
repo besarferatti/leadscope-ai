@@ -127,6 +127,27 @@ export interface OutreachEmailSend {
   created_at: string;
 }
 
+export type OutreachCampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
+export type OutreachCampaignMode = 'review' | 'autopilot';
+
+export interface OutreachCampaign {
+  id: string;
+  user_id: string;
+  name: string;
+  status: OutreachCampaignStatus;
+  mode: OutreachCampaignMode;
+  language: string;
+  tone: string;
+  daily_limit: number;
+  timezone: string;
+  send_window_start: string;
+  send_window_end: string;
+  created_at: string;
+  updated_at: string;
+  lead_count?: number;
+  sent_count?: number;
+}
+
 export interface UserSettings {
   openai_api_key?: string;
   google_places_api_key?: string;
