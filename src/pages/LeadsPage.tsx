@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, Download, Upload, Filter, Star, ChevronRight, Trash2,
-  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck, Check, Megaphone,
+  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck, Check, Megaphone, Loader2, AtSign,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type Websi
 import {
   canGenerateLead, canExportCSV, canUseBulkActions, isAdmin, incrementUsage,
 } from '../lib/plans';
+import { discoverLeadEmails, EmailDiscoveryProgress } from '../lib/emailDiscovery';
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
@@ -64,6 +65,8 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [targetCampaignId, setTargetCampaignId] = useState('');
   const [addingToCampaign, setAddingToCampaign] = useState(false);
   const [bulkMessage, setBulkMessage] = useState('');
+  const [emailDiscoveryProgress, setEmailDiscoveryProgress] = useState<EmailDiscoveryProgress | null>(null);
+  const autoDiscoveryStartedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -122,6 +125,29 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     setCampaigns((campaignsRes.data as OutreachCampaign[] | null) ?? []);
     console.log('[LeadsPage] finally setLoading(false)');
     setLoading(false);
+
+    if (initialSearchId && !autoDiscoveryStartedRef.current && leadsRes.data) {
+      autoDiscoveryStartedRef.current = true;
+      const newLeadIds = leadsRes.data
+        .filter(lead => lead.lead_search_id === initialSearchId && lead.website.trim() && !lead.email.trim() && !lead.email_status)
+        .map(lead => lead.id);
+      if (newLeadIds.length) void runEmailDiscovery(newLeadIds);
+    }
+  }
+
+  async function runEmailDiscovery(leadIds: string[]) {
+    if (!leadIds.length || emailDiscoveryProgress) return;
+    setError('');
+    setBulkMessage('');
+    try {
+      const result = await discoverLeadEmails(leadIds, setEmailDiscoveryProgress);
+      setBulkMessage(`Email search finished: ${result.found} found, ${result.notFound} not found, ${result.failed} failed.`);
+      await loadAllLeads().then(response => { if (response.data) setLeads(response.data); });
+    } catch (discoveryError) {
+      setError(discoveryError instanceof Error ? discoveryError.message : 'Unable to find emails.');
+    } finally {
+      setEmailDiscoveryProgress(null);
+    }
   }
 
   async function handleAddLead(e: React.FormEvent) {
@@ -279,6 +305,9 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     });
 
   const selectableFilteredIds = filteredLeads.filter(lead => lead.email.trim()).map(lead => lead.id);
+  const discoverableFilteredIds = filteredLeads
+    .filter(lead => lead.website.trim() && !lead.email.trim() && !lead.email_status)
+    .map(lead => lead.id);
   const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every(id => selectedLeadIds.has(id));
 
   function toggleLeadSelection(id: string) {
@@ -489,6 +518,11 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
         <button disabled={!targetCampaignId || addingToCampaign} onClick={() => void addSelectedToCampaign()} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"><Megaphone className="w-4 h-4" /> {addingToCampaign ? 'Adding...' : 'Add to campaign'}</button>
         <button onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
       </div>}
+      <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="flex-1"><p className="text-white text-sm font-medium">Automatic email discovery</p><p className="text-slate-500 text-xs mt-1">Scans the public website of every filtered lead that has not been checked yet. Progress is saved after each lead.</p></div>
+        {emailDiscoveryProgress && <div className="text-xs text-blue-300 min-w-48"><p>{emailDiscoveryProgress.completed} / {emailDiscoveryProgress.total} checked</p><div className="h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden"><div className="h-full bg-blue-500 transition-all" style={{ width: `${emailDiscoveryProgress.total ? (emailDiscoveryProgress.completed / emailDiscoveryProgress.total) * 100 : 0}%` }} /></div></div>}
+        <button disabled={Boolean(emailDiscoveryProgress) || discoverableFilteredIds.length === 0} onClick={() => void runEmailDiscovery(discoverableFilteredIds)} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-40">{emailDiscoveryProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <AtSign className="w-4 h-4" />} {emailDiscoveryProgress ? 'Finding emails...' : `Find missing emails (${discoverableFilteredIds.length})`}</button>
+      </div>
       {bulkMessage && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-emerald-300 text-sm flex items-center gap-2"><Check className="w-4 h-4" /> {bulkMessage}</div>}
 
       {filteredLeads.length === 0 ? (
