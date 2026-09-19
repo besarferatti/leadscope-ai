@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, Download, Upload, Filter, Star, ChevronRight, Trash2,
-  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck,
+  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck, Check, Megaphone,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Lead, LeadSearch, LeadStatus } from '../types';
+import { Lead, LeadSearch, LeadStatus, OutreachCampaign } from '../types';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
@@ -55,6 +55,15 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [filterWebsiteStatus, setFilterWebsiteStatus] = useState<WebsiteStatus | ''>('');
   const [filterSaved, setFilterSaved] = useState<'all' | 'saved' | 'unsaved'>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'lead_score' | 'business_name'>('created_at');
+  const [filterCity, setFilterCity] = useState('');
+  const [filterIndustry, setFilterIndustry] = useState('');
+  const [filterEmail, setFilterEmail] = useState<'all' | 'has_email' | 'no_email'>('all');
+  const [filterMinScore, setFilterMinScore] = useState(0);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
+  const [targetCampaignId, setTargetCampaignId] = useState('');
+  const [addingToCampaign, setAddingToCampaign] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,9 +101,10 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   async function loadData() {
     console.log('[LeadsPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
-    const [leadsRes, searchesRes] = await Promise.all([
+    const [leadsRes, searchesRes, campaignsRes] = await Promise.all([
       loadAllLeads(),
       supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
+      supabase.from('outreach_campaigns').select('*').order('created_at', { ascending: false }),
     ]);
     if (leadsRes.error) {
       console.log('[LeadsPage] query error', { source: 'leads', error: leadsRes.error.message });
@@ -109,6 +119,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       console.log('[LeadsPage] query success', { source: 'searches', count: searchesRes.data?.length ?? 0 });
     }
     setSearches((searchesRes.data as unknown as LeadSearch[]) ?? []);
+    setCampaigns((campaignsRes.data as OutreachCampaign[] | null) ?? []);
     console.log('[LeadsPage] finally setLoading(false)');
     setLoading(false);
   }
@@ -240,6 +251,9 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     exportLeadsCSV(data as unknown as Array<Record<string, unknown>>, 'leads-export.csv');
   }
 
+  const cityOptions = useMemo(() => [...new Set(leads.map(lead => lead.location.split(',')[0]?.trim()).filter(Boolean))].sort(), [leads]);
+  const industryOptions = useMemo(() => [...new Set(leads.map(lead => lead.industry.trim()).filter(Boolean))].sort(), [leads]);
+
   const filteredLeads = leads
     .filter(l => {
       if (filterStatus && l.status !== filterStatus) return false;
@@ -247,6 +261,11 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       if (filterWebsiteStatus && getWebsiteStatus(l.website) !== filterWebsiteStatus) return false;
       if (filterSaved === 'saved' && !l.saved_at) return false;
       if (filterSaved === 'unsaved' && l.saved_at) return false;
+      if (filterCity && l.location.split(',')[0]?.trim().toLowerCase() !== filterCity.toLowerCase()) return false;
+      if (filterIndustry && l.industry.toLowerCase() !== filterIndustry.toLowerCase()) return false;
+      if (filterEmail === 'has_email' && !l.email.trim()) return false;
+      if (filterEmail === 'no_email' && l.email.trim()) return false;
+      if (l.lead_score < filterMinScore) return false;
       if (filterQuery) {
         const q = filterQuery.toLowerCase();
         return l.business_name.toLowerCase().includes(q) || l.location.toLowerCase().includes(q) || l.industry.toLowerCase().includes(q) || l.email.toLowerCase().includes(q);
@@ -258,6 +277,47 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       if (sortBy === 'business_name') return a.business_name.localeCompare(b.business_name);
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
+
+  const selectableFilteredIds = filteredLeads.filter(lead => lead.email.trim()).map(lead => lead.id);
+  const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every(id => selectedLeadIds.has(id));
+
+  function toggleLeadSelection(id: string) {
+    setSelectedLeadIds(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setBulkMessage('');
+  }
+
+  function toggleAllFiltered() {
+    setSelectedLeadIds(current => {
+      const next = new Set(current);
+      if (allFilteredSelected) selectableFilteredIds.forEach(id => next.delete(id));
+      else selectableFilteredIds.forEach(id => next.add(id));
+      return next;
+    });
+    setBulkMessage('');
+  }
+
+  async function addSelectedToCampaign() {
+    if (!targetCampaignId || selectedLeadIds.size === 0) return;
+    setAddingToCampaign(true);
+    setError('');
+    setBulkMessage('');
+    const eligibleIds = leads.filter(lead => selectedLeadIds.has(lead.id) && lead.email.trim()).map(lead => lead.id);
+    const { error: addError } = await supabase.from('outreach_campaign_leads').upsert(
+      eligibleIds.map(leadId => ({ campaign_id: targetCampaignId, lead_id: leadId, status: 'pending' })),
+      { onConflict: 'campaign_id,lead_id', ignoreDuplicates: true },
+    );
+    if (addError) setError(addError.message);
+    else {
+      setBulkMessage(`${eligibleIds.length} lead${eligibleIds.length === 1 ? '' : 's'} added to the campaign.`);
+      setSelectedLeadIds(new Set());
+      setTargetCampaignId('');
+    }
+    setAddingToCampaign(false);
+  }
 
   if (loading) return <LoadingSpinner message="Loading leads..." />;
 
@@ -381,6 +441,25 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="">All Searches</option>
           {searches.map(s => <option key={s.id} value={s.id}>{s.niche} — {s.location}</option>)}
         </select>
+        <select className="select w-auto" value={filterCity} onChange={e => setFilterCity(e.target.value)}>
+          <option value="">All Cities</option>
+          {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
+        </select>
+        <select className="select w-auto" value={filterIndustry} onChange={e => setFilterIndustry(e.target.value)}>
+          <option value="">All Niches</option>
+          {industryOptions.map(industry => <option key={industry} value={industry}>{industry}</option>)}
+        </select>
+        <select className="select w-auto" value={filterEmail} onChange={e => setFilterEmail(e.target.value as typeof filterEmail)}>
+          <option value="all">All Emails</option>
+          <option value="has_email">Has Email</option>
+          <option value="no_email">No Email</option>
+        </select>
+        <select className="select w-auto" value={filterMinScore} onChange={e => setFilterMinScore(Number(e.target.value))}>
+          <option value={0}>Any Score</option>
+          <option value={50}>Score 50+</option>
+          <option value={70}>Score 70+</option>
+          <option value={85}>Score 85+</option>
+        </select>
         <select className="select w-auto" value={filterWebsiteStatus} onChange={e => setFilterWebsiteStatus(e.target.value as WebsiteStatus | '')}>
           <option value="">All Websites</option>
           <option value="real">Has Real Website</option>
@@ -397,12 +476,20 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="lead_score">Highest Score</option>
           <option value="business_name">A → Z</option>
         </select>
-        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus || filterSaved !== 'all') && (
-          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); setFilterSaved('all'); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus || filterSaved !== 'all' || filterCity || filterIndustry || filterEmail !== 'all' || filterMinScore > 0) && (
+          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); setFilterSaved('all'); setFilterCity(''); setFilterIndustry(''); setFilterEmail('all'); setFilterMinScore(0); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             <X className="w-3.5 h-3.5" /> Clear
           </button>
         )}
       </div>
+
+      {selectedLeadIds.size > 0 && <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3 border-blue-500/30">
+        <div className="flex-1"><p className="text-white text-sm font-medium">{selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? '' : 's'} selected</p><p className="text-slate-500 text-xs mt-1">Only leads with an email address can be added to outreach campaigns.</p></div>
+        <select className="select lg:w-72" value={targetCampaignId} onChange={event => setTargetCampaignId(event.target.value)}><option value="">Choose campaign...</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.name} ({campaign.status})</option>)}</select>
+        <button disabled={!targetCampaignId || addingToCampaign} onClick={() => void addSelectedToCampaign()} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"><Megaphone className="w-4 h-4" /> {addingToCampaign ? 'Adding...' : 'Add to campaign'}</button>
+        <button onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
+      </div>}
+      {bulkMessage && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-emerald-300 text-sm flex items-center gap-2"><Check className="w-4 h-4" /> {bulkMessage}</div>}
 
       {filteredLeads.length === 0 ? (
         <EmptyState
@@ -421,6 +508,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800">
+                  <th className="text-left pl-5 pr-1 py-3 text-slate-400 font-medium"><button onClick={toggleAllFiltered} disabled={!selectableFilteredIds.length} className={`w-5 h-5 rounded border flex items-center justify-center ${allFilteredSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-30`} title="Select all filtered leads with email">{allFilteredSelected && <Check className="w-3.5 h-3.5" />}</button></th>
                   <th className="text-left px-5 py-3 text-slate-400 font-medium">Business</th>
                   <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Industry</th>
                   <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Contact</th>
@@ -441,6 +529,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
                   return (
                     <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
+                    <td className="pl-5 pr-1 py-3.5"><button onClick={() => toggleLeadSelection(lead.id)} disabled={!lead.email.trim()} className={`w-5 h-5 rounded border flex items-center justify-center ${selectedLeadIds.has(lead.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-25`} title={lead.email.trim() ? 'Select lead' : 'Email required'}>{selectedLeadIds.has(lead.id) && <Check className="w-3.5 h-3.5" />}</button></td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="font-medium text-slate-200 truncate max-w-[180px]">{lead.business_name}</div>
