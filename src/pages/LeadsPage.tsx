@@ -306,7 +306,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
   const selectableFilteredIds = filteredLeads.filter(lead => lead.email.trim()).map(lead => lead.id);
   const discoverableFilteredIds = filteredLeads
-    .filter(lead => lead.website.trim() && !lead.email.trim() && !lead.email_status)
+    .filter(lead => lead.website.trim() && ((!lead.email.trim() && !lead.email_status) || lead.email_status === 'unverified'))
     .map(lead => lead.id);
   const allFilteredSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every(id => selectedLeadIds.has(id));
 
