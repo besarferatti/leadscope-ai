@@ -1,4 +1,4 @@
-import { lookup } from 'node:dns/promises';
+import { lookup, resolveMx } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,6 +16,8 @@ const ALLOWED_PORTS = new Set(['', '80', '443']);
 const PRIORITY_LINK = /contact(?:-us)?|about(?:-us)?|team|staff|support|impressum|legal/i;
 const LEGAL_LINK = /privacy|legal|impressum|terms/i;
 const FREE_EMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'icloud.com', 'aol.com', 'proton.me', 'protonmail.com']);
+const DISPOSABLE_EMAIL_DOMAINS = new Set(['10minutemail.com', 'guerrillamail.com', 'mailinator.com', 'tempmail.com', 'temp-mail.org', 'yopmail.com', 'sharklasers.com', 'throwawaymail.com']);
+const MIN_ACCEPTED_CONFIDENCE = 70;
 const GENERIC_INBOXES = /^(contact|info|hello|sales|office|support)$/i;
 const UNWANTED_LOCAL = /^(no-?reply|do-?not-?reply|abuse|privacy|webmaster)$/i;
 const EMAIL_PATTERN = /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/gi;
@@ -139,6 +141,19 @@ function scoreCandidate(candidate: Omit<Candidate, 'score'>, websiteDomain: stri
   return { ...candidate, score: Math.max(0, Math.min(100, score)) };
 }
 
+async function validateCandidate(candidate: Candidate) {
+  const domain = candidate.email.split('@')[1]?.toLowerCase() ?? '';
+  if (candidate.score < MIN_ACCEPTED_CONFIDENCE) return { accepted: false, reason: 'low_confidence' };
+  if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) return { accepted: false, reason: 'disposable_domain' };
+  try {
+    const records = await resolveMx(domain);
+    if (!records.some(record => record.exchange && record.exchange !== '.')) return { accepted: false, reason: 'no_mx_records' };
+  } catch {
+    return { accepted: false, reason: 'no_mx_records' };
+  }
+  return { accepted: true, reason: null };
+}
+
 export const config = { runtime: 'nodejs' };
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   res.setHeader('Allow', 'POST');
@@ -168,11 +183,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const ranked = [...candidates.values()].sort((a, b) => b.score - a.score || a.email.localeCompare(b.email)); const now = new Date().toISOString();
     if (!ranked.length) { const { error: updateError } = await admin.from('leads').update({ email_status: 'not_found', email_found_at: now, email_candidates: [] }).eq('id', lead.id).eq('user_id', user.id); if (updateError) throw new Error('Unable to save the email discovery result.'); return respond(res, 200, { status: 'not_found', message: 'No public business email was found.' }); }
-    const best = ranked[0]; const update: Record<string, unknown> = { email_source_url: best.source_url, email_source_type: best.source_type, email_confidence: best.score, email_status: 'unverified', email_found_at: now, email_candidates: ranked.map(({ email, source_url, source_type, score }) => ({ email, source_url, source_type, confidence: score })) };
+    const validations = await Promise.all(ranked.map(async candidate => ({ candidate, ...(await validateCandidate(candidate)) })));
+    const accepted = validations.find(result => result.accepted);
+    const candidateLog = validations.map(({ candidate, accepted: isAccepted, reason }) => ({
+      email: candidate.email, source_url: candidate.source_url, source_type: candidate.source_type,
+      confidence: candidate.score, accepted: isAccepted, rejection_reason: reason,
+    }));
+    if (!accepted) {
+      const rejectionUpdate: Record<string, unknown> = { email_status: 'rejected', email_found_at: now, email_candidates: candidateLog };
+      if (lead.email_source_type) Object.assign(rejectionUpdate, { email: '', email_source_url: null, email_source_type: null, email_confidence: null });
+      const { error: updateError } = await admin.from('leads').update(rejectionUpdate).eq('id', lead.id).eq('user_id', user.id);
+      if (updateError) throw new Error('Unable to save the email verification result.');
+      const reasons = [...new Set(validations.map(result => result.reason).filter(Boolean))];
+      return respond(res, 200, { status: 'rejected', message: 'Public email candidates were found but failed automatic verification.', reasons, candidates: candidateLog });
+    }
+    const best = accepted.candidate; const update: Record<string, unknown> = { email_source_url: best.source_url, email_source_type: best.source_type, email_confidence: best.score, email_status: 'validated', email_found_at: now, email_candidates: candidateLog };
     if (!lead.email || lead.email_source_type) update.email = best.email;
     const { error: updateError } = await admin.from('leads').update(update).eq('id', lead.id).eq('user_id', user.id);
     if (updateError) throw new Error('Unable to save the email discovery result.');
-    return respond(res, 200, { status: 'found', email: update.email ?? lead.email, confidence: best.score, sourceUrl: best.source_url, sourceType: best.source_type, emailStatus: 'unverified', candidates: update.email_candidates });
+    return respond(res, 200, { status: 'found', email: update.email ?? lead.email, confidence: best.score, sourceUrl: best.source_url, sourceType: best.source_type, emailStatus: 'validated', candidates: update.email_candidates });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error.';
     if (/aborted|timeout/i.test(message)) return respond(res, 504, { status: 'timeout', error: 'The website took too long to respond.' });
