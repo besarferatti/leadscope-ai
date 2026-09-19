@@ -16,7 +16,6 @@ import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type Websi
 import {
   canGenerateLead, canExportCSV, canUseBulkActions, isAdmin, incrementUsage,
 } from '../lib/plans';
-import { discoverLeadEmails, EmailDiscoveryProgress } from '../lib/emailDiscovery';
 
 interface Props {
   onNavigate: (page: string, params?: Record<string, string>) => void;
@@ -65,7 +64,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [targetCampaignId, setTargetCampaignId] = useState('');
   const [addingToCampaign, setAddingToCampaign] = useState(false);
   const [bulkMessage, setBulkMessage] = useState('');
-  const [emailDiscoveryProgress, setEmailDiscoveryProgress] = useState<EmailDiscoveryProgress | null>(null);
+  const [emailQueueing, setEmailQueueing] = useState(false);
   const autoDiscoveryStartedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,17 +135,24 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   }
 
   async function runEmailDiscovery(leadIds: string[]) {
-    if (!leadIds.length || emailDiscoveryProgress) return;
+    if (!user || !leadIds.length || emailQueueing) return;
+    setEmailQueueing(true);
     setError('');
     setBulkMessage('');
     try {
-      const result = await discoverLeadEmails(leadIds, setEmailDiscoveryProgress);
-      setBulkMessage(`Email search finished: ${result.found} found, ${result.notFound} not found, ${result.failed} failed.`);
-      await loadAllLeads().then(response => { if (response.data) setLeads(response.data); });
+      for (let start = 0; start < leadIds.length; start += 500) {
+        const batch = leadIds.slice(start, start + 500).map(leadId => ({
+          user_id: user.id, lead_id: leadId, status: 'queued', attempts: 0,
+          next_attempt_at: new Date().toISOString(), last_error: null, completed_at: null, updated_at: new Date().toISOString(),
+        }));
+        const { error: queueError } = await supabase.from('email_discovery_jobs').upsert(batch, { onConflict: 'user_id,lead_id' });
+        if (queueError) throw queueError;
+      }
+      setBulkMessage(`${leadIds.length} lead${leadIds.length === 1 ? '' : 's'} queued. Email discovery will continue in the background.`);
     } catch (discoveryError) {
-      setError(discoveryError instanceof Error ? discoveryError.message : 'Unable to find emails.');
+      setError(discoveryError instanceof Error ? discoveryError.message : 'Unable to queue email discovery.');
     } finally {
-      setEmailDiscoveryProgress(null);
+      setEmailQueueing(false);
     }
   }
 
@@ -519,9 +525,8 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
         <button onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
       </div>}
       <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="flex-1"><p className="text-white text-sm font-medium">Automatic email discovery</p><p className="text-slate-500 text-xs mt-1">Scans the public website of every filtered lead that has not been checked yet. Progress is saved after each lead.</p></div>
-        {emailDiscoveryProgress && <div className="text-xs text-blue-300 min-w-48"><p>{emailDiscoveryProgress.completed} / {emailDiscoveryProgress.total} checked</p><div className="h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden"><div className="h-full bg-blue-500 transition-all" style={{ width: `${emailDiscoveryProgress.total ? (emailDiscoveryProgress.completed / emailDiscoveryProgress.total) * 100 : 0}%` }} /></div></div>}
-        <button disabled={Boolean(emailDiscoveryProgress) || discoverableFilteredIds.length === 0} onClick={() => void runEmailDiscovery(discoverableFilteredIds)} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-40">{emailDiscoveryProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <AtSign className="w-4 h-4" />} {emailDiscoveryProgress ? 'Finding emails...' : `Find missing emails (${discoverableFilteredIds.length})`}</button>
+        <div className="flex-1"><p className="text-white text-sm font-medium">Background email discovery</p><p className="text-slate-500 text-xs mt-1">Queues every filtered lead that has not been checked. Processing continues safely after this tab is closed.</p></div>
+        <button disabled={emailQueueing || discoverableFilteredIds.length === 0} onClick={() => void runEmailDiscovery(discoverableFilteredIds)} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-40">{emailQueueing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AtSign className="w-4 h-4" />} {emailQueueing ? 'Adding to queue...' : `Queue missing emails (${discoverableFilteredIds.length})`}</button>
       </div>
       {bulkMessage && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-emerald-300 text-sm flex items-center gap-2"><Check className="w-4 h-4" /> {bulkMessage}</div>}
 

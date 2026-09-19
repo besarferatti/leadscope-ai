@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 type ApiRequest = { method?: string; headers: { authorization?: string | string[]; Authorization?: string | string[] }; body?: unknown };
 type ApiResponse = { status: (statusCode: number) => ApiResponse; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
-type FindEmailBody = { leadId?: unknown };
+type FindEmailBody = { leadId?: unknown; userId?: unknown };
 type SourceType = 'website_mailto' | 'website_text' | 'website_jsonld';
 type Candidate = { email: string; source_url: string; source_type: SourceType; score: number };
 type LeadRecord = { id: string; user_id: string; website: string | null; email: string | null; email_source_type: string | null };
@@ -163,13 +163,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const token = auth.replace(/^Bearer\s+/i, '').trim(); if (!token) return respond(res, 401, { error: 'Unauthorized.' });
   const requestBody = (req.body ?? {}) as FindEmailBody;
   const leadId = typeof requestBody.leadId === 'string' ? requestBody.leadId.trim() : '';
+  const requestedUserId = typeof requestBody.userId === 'string' ? requestBody.userId.trim() : '';
   if (!leadId) return respond(res, 400, { error: 'leadId is required.' });
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL; const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) return respond(res, 500, { error: 'Email discovery is not configured.' });
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: { user }, error: userError } = await admin.auth.getUser(token);
-  if (userError || !user) return respond(res, 401, { error: 'Unauthorized.' });
-  const { data: lead, error: leadError } = await admin.from('leads').select('id, user_id, website, email, email_source_type').eq('id', leadId).eq('user_id', user.id).maybeSingle<LeadRecord>();
+  const cronSecret = process.env.CRON_SECRET;
+  let ownerId = '';
+  if (cronSecret && token === cronSecret && requestedUserId) ownerId = requestedUserId;
+  else {
+    const { data: { user }, error: userError } = await admin.auth.getUser(token);
+    if (userError || !user) return respond(res, 401, { error: 'Unauthorized.' });
+    ownerId = user.id;
+  }
+  const { data: lead, error: leadError } = await admin.from('leads').select('id, user_id, website, email, email_source_type').eq('id', leadId).eq('user_id', ownerId).maybeSingle<LeadRecord>();
   if (leadError || !lead) return respond(res, 404, { error: 'Lead not found.' });
   if (!lead.website?.trim()) return respond(res, 200, { status: 'no_website', message: 'No website available.' });
   try {
@@ -182,7 +189,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (visited.size <= MAX_INTERNAL_PAGES) for (const candidateUrl of priorityLinks(page.html, page.url, domain)) { if (queue.length >= MAX_INTERNAL_PAGES + 1) break; if (!visited.has(candidateUrl.toString()) && !queue.some(queued => queued.toString() === candidateUrl.toString())) queue.push(candidateUrl); }
     }
     const ranked = [...candidates.values()].sort((a, b) => b.score - a.score || a.email.localeCompare(b.email)); const now = new Date().toISOString();
-    if (!ranked.length) { const { error: updateError } = await admin.from('leads').update({ email_status: 'not_found', email_found_at: now, email_candidates: [] }).eq('id', lead.id).eq('user_id', user.id); if (updateError) throw new Error('Unable to save the email discovery result.'); return respond(res, 200, { status: 'not_found', message: 'No public business email was found.' }); }
+    if (!ranked.length) { const { error: updateError } = await admin.from('leads').update({ email_status: 'not_found', email_found_at: now, email_candidates: [] }).eq('id', lead.id).eq('user_id', ownerId); if (updateError) throw new Error('Unable to save the email discovery result.'); return respond(res, 200, { status: 'not_found', message: 'No public business email was found.' }); }
     const validations = await Promise.all(ranked.map(async candidate => ({ candidate, ...(await validateCandidate(candidate)) })));
     const accepted = validations.find(result => result.accepted);
     const candidateLog = validations.map(({ candidate, accepted: isAccepted, reason }) => ({
@@ -192,14 +199,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!accepted) {
       const rejectionUpdate: Record<string, unknown> = { email_status: 'rejected', email_found_at: now, email_candidates: candidateLog };
       if (lead.email_source_type) Object.assign(rejectionUpdate, { email: '', email_source_url: null, email_source_type: null, email_confidence: null });
-      const { error: updateError } = await admin.from('leads').update(rejectionUpdate).eq('id', lead.id).eq('user_id', user.id);
+      const { error: updateError } = await admin.from('leads').update(rejectionUpdate).eq('id', lead.id).eq('user_id', ownerId);
       if (updateError) throw new Error('Unable to save the email verification result.');
       const reasons = [...new Set(validations.map(result => result.reason).filter(Boolean))];
       return respond(res, 200, { status: 'rejected', message: 'Public email candidates were found but failed automatic verification.', reasons, candidates: candidateLog });
     }
     const best = accepted.candidate; const update: Record<string, unknown> = { email_source_url: best.source_url, email_source_type: best.source_type, email_confidence: best.score, email_status: 'validated', email_found_at: now, email_candidates: candidateLog };
     if (!lead.email || lead.email_source_type) update.email = best.email;
-    const { error: updateError } = await admin.from('leads').update(update).eq('id', lead.id).eq('user_id', user.id);
+    const { error: updateError } = await admin.from('leads').update(update).eq('id', lead.id).eq('user_id', ownerId);
     if (updateError) throw new Error('Unable to save the email discovery result.');
     return respond(res, 200, { status: 'found', email: update.email ?? lead.email, confidence: best.score, sourceUrl: best.source_url, sourceType: best.source_type, emailStatus: 'validated', candidates: update.email_candidates });
   } catch (error) {
