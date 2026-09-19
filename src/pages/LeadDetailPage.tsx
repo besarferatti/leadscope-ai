@@ -135,11 +135,11 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error('Please sign in again before finding an email.');
       const response = await fetch('/api/find-lead-email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ leadId: lead.id }) });
-      const data = await response.json() as { status?: string; error?: string; message?: string; email?: string; confidence?: number; sourceUrl?: string; sourceType?: Lead['email_source_type'] };
+      const data = await response.json() as { status?: string; error?: string; message?: string; email?: string; confidence?: number; sourceUrl?: string; sourceType?: Lead['email_source_type']; emailStatus?: Lead['email_status'] };
       if (!response.ok) throw new Error(data.error || 'Unable to search the website.');
-      if (data.status === 'not_found' || data.status === 'no_website') { setEmailFindMessage(data.message || 'No public business email was found.'); await loadAll(); return; }
+      if (data.status === 'not_found' || data.status === 'no_website' || data.status === 'rejected') { setEmailFindMessage(data.message || 'No verified public business email was found.'); await loadAll(); return; }
       if (data.status !== 'found') throw new Error(data.error || 'Unable to search the website.');
-      setLead(current => current ? { ...current, email: data.email ?? current.email, email_confidence: data.confidence ?? null, email_source_url: data.sourceUrl ?? null, email_source_type: data.sourceType ?? null, email_status: 'unverified' } : current);
+      setLead(current => current ? { ...current, email: data.email ?? current.email, email_confidence: data.confidence ?? null, email_source_url: data.sourceUrl ?? null, email_source_type: data.sourceType ?? null, email_status: data.emailStatus ?? 'validated' } : current);
       setRecipientEmail(current => current || data.email || '');
       setEmailFindMessage('');
     } catch (findError: unknown) { setEmailFindMessage(findError instanceof Error ? findError.message : 'Unable to search the website.'); }
@@ -531,12 +531,13 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
               )}
               <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div><p className="text-sm font-medium text-slate-200">Public business email</p>{lead.email_status === 'unverified' && <p className="mt-1 text-xs text-amber-300">Unverified{lead.email_confidence != null ? ` · ${lead.email_confidence}% confidence` : ''}</p>}</div>
+                  <div><p className="text-sm font-medium text-slate-200">Public business email</p>{lead.email_status === 'unverified' && <p className="mt-1 text-xs text-amber-300">Legacy unverified{lead.email_confidence != null ? ` · ${lead.email_confidence}% confidence` : ''}</p>}{lead.email_status === 'validated' && <p className="mt-1 text-xs text-emerald-300">Validated source + MX{lead.email_confidence != null ? ` · ${lead.email_confidence}% confidence` : ''}</p>}</div>
                   <button type="button" onClick={handleFindEmail} disabled={!lead.website || emailFinding} className="btn-secondary shrink-0 text-xs py-1.5 disabled:opacity-50">{emailFinding ? <><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />Searching website...</> : lead.email_status ? 'Retry' : 'Find Email'}</button>
                 </div>
                 {!lead.website && <p className="mt-2 text-xs text-slate-500">No website available</p>}
                 {lead.email_status === 'unverified' && lead.email_source_url && <p className="mt-2 text-xs text-slate-400">Source: <a href={lead.email_source_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">{lead.email_source_url.replace(/^https?:\/\//, '')}</a></p>}
                 {lead.email_status === 'not_found' && !emailFindMessage && <p className="mt-2 text-xs text-slate-500">No public business email found.</p>}
+                {lead.email_status === 'rejected' && !emailFindMessage && <p className="mt-2 text-xs text-amber-300">Email candidates were rejected by automatic verification.</p>}
                 {emailFindMessage && <p className="mt-2 text-xs text-slate-400">{emailFindMessage}</p>}
               </div>
               {lead.address && (
