@@ -205,12 +205,12 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
                 billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-400'
               }`}>
-                -20%
+                2 months free
               </span>
             </button>
           </div>
           {billing === 'yearly' && (
-            <p className="text-emerald-400 text-sm mt-3 font-medium">Save 20% with yearly billing</p>
+            <p className="text-emerald-400 text-sm mt-3 font-medium">Get 2 months free with yearly billing</p>
           )}
         </div>
 
