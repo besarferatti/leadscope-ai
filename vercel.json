@@ -9,8 +9,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "crons": [
-    { "path": "/api/process-email-discovery-queue", "schedule": "*/5 * * * *" }
   ]
 }
