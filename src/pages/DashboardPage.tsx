@@ -55,6 +55,7 @@ async function withTimeout<T>(
 interface Stats {
   totalLeads: number;
   totalSearches: number;
+  analyzedLeads: number;
   avgScore: number;
   interestedLeads: number;
 }
@@ -105,6 +106,7 @@ export function DashboardPage({ onNavigate }: Props) {
   const [stats, setStats] = useState<Stats>({
     totalLeads: 0,
     totalSearches: 0,
+    analyzedLeads: 0,
     avgScore: 0,
     interestedLeads: 0,
   });
@@ -161,7 +163,7 @@ export function DashboardPage({ onNavigate }: Props) {
         withTimeout(
           supabase
             .from('lead_searches')
-            .select('*')
+            .select('*', { count: 'exact' })
             .order('created_at', { ascending: false })
             .limit(5),
           8000,
@@ -172,6 +174,7 @@ export function DashboardPage({ onNavigate }: Props) {
       const errors: string[] = [];
       let leads: Lead[] = [];
       let searches: LeadSearch[] = [];
+      let totalSearches = 0;
 
       if (leadsResult.status === 'fulfilled') {
         if (leadsResult.value.error) {
@@ -192,6 +195,7 @@ export function DashboardPage({ onNavigate }: Props) {
           errors.push(searchesResult.value.error.message);
         } else {
           searches = (searchesResult.value.data ?? []) as LeadSearch[];
+          totalSearches = searchesResult.value.count ?? searches.length;
         }
       } else {
         errors.push(
@@ -202,15 +206,17 @@ export function DashboardPage({ onNavigate }: Props) {
       }
 
       const totalLeads = leads.length;
-      const avgScore = totalLeads
+      const analyzedLeads = leads.filter((lead) => lead.lead_score > 0);
+      const avgScore = analyzedLeads.length
         ? Math.round(
-            leads.reduce((total, lead) => total + (lead.lead_score || 0), 0) / totalLeads
+            analyzedLeads.reduce((total, lead) => total + lead.lead_score, 0) / analyzedLeads.length
           )
         : 0;
 
       setStats({
         totalLeads,
-        totalSearches: searches.length,
+        totalSearches,
+        analyzedLeads: analyzedLeads.length,
         avgScore,
         interestedLeads: leads.filter((lead) => lead.status === 'Interested').length,
       });
@@ -259,6 +265,13 @@ export function DashboardPage({ onNavigate }: Props) {
       icon: Search,
       color: 'text-emerald-400',
       bg: 'bg-emerald-500/10',
+    },
+    {
+      label: 'Analyzed Leads',
+      value: stats.analyzedLeads,
+      icon: BarChart3,
+      color: 'text-cyan-400',
+      bg: 'bg-cyan-500/10',
     },
     {
       label: 'Avg. Lead Score',
@@ -364,7 +377,7 @@ export function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-xl overflow-hidden border border-slate-800 bg-slate-800">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-px rounded-xl overflow-hidden border border-slate-800 bg-slate-800">
         {statCards.map((card) => (
           <div key={card.label} className="bg-slate-900 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-3">
