@@ -10,7 +10,7 @@ const corsHeaders = {
 type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
 type UserProfile = { id: string; email: string; full_name: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; messages_used_this_month: number; is_active: boolean };
 type UserSettings = { id: string; agency_name: string | null; agency_website: string | null };
-type SenderIdentity = { name: string; position: string; agencyName: string; agencyWebsite: string; email: string; phone: string };
+type SenderIdentity = { name: string; position: string; agencyName: string; agencyWebsite: string; phone: string };
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
 type Audit = { website_score: number; seo_score: number; conversion_score: number; main_issues: string[]; recommended_offer: string; personalization_angle: string };
 type OutreachPayload = { subject: string; body: string };
@@ -30,7 +30,6 @@ function buildSignature(sender: SenderIdentity) {
     sender.agencyName,
     sender.agencyWebsite,
     sender.phone,
-    sender.email,
   ].filter(Boolean);
   return signatureLines.join("\n");
 }
@@ -47,7 +46,7 @@ function applySenderIdentity(message: string, sender: SenderIdentity, ensureSign
     [/\[Your Agency Name\]/gi, sender.agencyName],
     [/\[Your Position\]/gi, sender.position],
     [/\[Your Phone Number\]/gi, sender.phone],
-    [/\[Your Email Address\]/gi, sender.email],
+    [/\[Your Email Address\]/gi, ""],
   ];
   let cleaned = message;
   for (const [pattern, value] of replacements) {
@@ -106,14 +105,12 @@ Deno.serve(async (req: Request) => {
       position: "",
       agencyName: compact(typedSettings?.agency_name),
       agencyWebsite: compact(typedSettings?.agency_website),
-      email: compact(typedProfile.email) || compact(user.email),
       phone: "",
     };
     console.log("Outreach sender settings loaded", {
       hasName: Boolean(sender.name),
       hasAgencyName: Boolean(sender.agencyName),
       hasWebsite: Boolean(sender.agencyWebsite),
-      hasEmail: Boolean(sender.email),
       hasPhone: Boolean(sender.phone),
     });
 
@@ -133,8 +130,7 @@ Name: ${sender.name || "missing"}
 Position: ${sender.position || "missing"}
 Agency name: ${sender.agencyName || "missing"}
 Agency website: ${sender.agencyWebsite || "missing"}
-Phone: ${sender.phone || "missing"}
-Email: ${sender.email || "missing"}`;
+Phone: ${sender.phone || "missing"}`;
     const prompt = `You write concise, human cold outreach for a digital agency. Write a ${tone.toLowerCase()} ${channel} in ${language} for this prospect.
 
 Prospect:
