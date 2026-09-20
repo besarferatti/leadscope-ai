@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Plus, Download, Upload, Filter, Star, ChevronRight, Trash2,
-  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck, Check, Megaphone, Loader2, AtSign,
+  Globe, Phone, Mail, Search, X, AlertCircle, Bookmark, BookmarkCheck, Check, Megaphone, Loader2, AtSign, Zap,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -14,7 +14,7 @@ import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type WebsiteStatus } from '../lib/utils';
 import {
-  canGenerateLead, canExportCSV, isAdmin, incrementUsage,
+  canGenerateLead, canExportCSV, getPlanLimits, isAdmin, incrementUsage,
 } from '../lib/plans';
 
 interface Props {
@@ -63,6 +63,10 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
   const [targetCampaignId, setTargetCampaignId] = useState('');
   const [addingToCampaign, setAddingToCampaign] = useState(false);
+  const [auditedLeadIds, setAuditedLeadIds] = useState<Set<string>>(new Set());
+  const [bulkAnalyzing, setBulkAnalyzing] = useState(false);
+  const [reanalyzeExisting, setReanalyzeExisting] = useState(false);
+  const [bulkAnalyzeProgress, setBulkAnalyzeProgress] = useState({ current: 0, total: 0, completed: 0, skipped: 0, failed: 0 });
   const [bulkMessage, setBulkMessage] = useState('');
   const [emailQueueing, setEmailQueueing] = useState(false);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
@@ -100,13 +104,30 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     return { data: allLeads, error: null };
   }
 
+  async function loadAllAuditedLeadIds() {
+    const pageSize = 1000;
+    const leadIds: string[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error: queryError } = await supabase
+        .from('lead_audits')
+        .select('lead_id')
+        .range(from, from + pageSize - 1);
+      if (queryError) return { data: null, error: queryError };
+      const page = data ?? [];
+      leadIds.push(...page.map(item => item.lead_id as string));
+      if (page.length < pageSize) break;
+    }
+    return { data: leadIds, error: null };
+  }
+
   async function loadData() {
     console.log('[LeadsPage] load function started', { userId: user?.id ?? null });
     setLoading(true);
-    const [leadsRes, searchesRes, campaignsRes] = await Promise.all([
+    const [leadsRes, searchesRes, campaignsRes, auditsRes] = await Promise.all([
       loadAllLeads(),
       supabase.from('lead_searches').select('id, niche, location').order('created_at', { ascending: false }),
       supabase.from('outreach_campaigns').select('*').order('created_at', { ascending: false }),
+      loadAllAuditedLeadIds(),
     ]);
     if (leadsRes.error) {
       console.log('[LeadsPage] query error', { source: 'leads', error: leadsRes.error.message });
@@ -122,6 +143,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     }
     setSearches((searchesRes.data as unknown as LeadSearch[]) ?? []);
     setCampaigns((campaignsRes.data as OutreachCampaign[] | null) ?? []);
+    if (!auditsRes.error) setAuditedLeadIds(new Set(auditsRes.data ?? []));
     console.log('[LeadsPage] finally setLoading(false)');
     setLoading(false);
 
@@ -310,7 +332,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
-  const selectableFilteredIds = filteredLeads.filter(lead => lead.email.trim()).map(lead => lead.id);
+  const selectableFilteredIds = filteredLeads.map(lead => lead.id);
   const discoverableFilteredIds = filteredLeads
     .filter(lead => lead.website.trim() && ((!lead.email.trim() && !lead.email_status) || lead.email_status === 'unverified'))
     .map(lead => lead.id);
@@ -352,6 +374,65 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       setTargetCampaignId('');
     }
     setAddingToCampaign(false);
+  }
+
+  async function analyzeSelected() {
+    if (!selectedLeadIds.size || bulkAnalyzing) return;
+
+    const selectedIds = [...selectedLeadIds];
+    const existingSkippedIds = reanalyzeExisting ? [] : selectedIds.filter(id => auditedLeadIds.has(id));
+    let queuedIds = selectedIds.filter(id => reanalyzeExisting || !auditedLeadIds.has(id));
+    let limitSkipped = 0;
+
+    if (!isAdmin(profile)) {
+      const limits = getPlanLimits(profile);
+      const remaining = limits.auditsLimit === -1
+        ? queuedIds.length
+        : Math.max(0, limits.auditsLimit - (profile?.audits_used_this_month ?? 0));
+      if (remaining === 0 && queuedIds.length) {
+        setUpgradeMsg("You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites.");
+        return;
+      }
+      if (queuedIds.length > remaining) {
+        limitSkipped = queuedIds.length - remaining;
+        queuedIds = queuedIds.slice(0, remaining);
+      }
+    }
+
+    const total = queuedIds.length;
+    const skipped = existingSkippedIds.length + limitSkipped;
+    setBulkAnalyzing(true);
+    setError('');
+    setBulkMessage('');
+    setBulkAnalyzeProgress({ current: 0, total, completed: 0, skipped, failed: 0 });
+
+    let nextIndex = 0;
+    let completed = 0;
+    let failed = 0;
+    const newlyAudited = new Set<string>();
+
+    async function worker() {
+      while (nextIndex < queuedIds.length) {
+        const leadId = queuedIds[nextIndex++];
+        try {
+          const { data, error: functionError } = await supabase.functions.invoke('analyze-lead', { body: { lead_id: leadId } });
+          if (functionError) throw new Error(functionError.message);
+          if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
+          completed += 1;
+          newlyAudited.add(leadId);
+        } catch {
+          failed += 1;
+        }
+        setBulkAnalyzeProgress({ current: completed + failed, total, completed, skipped, failed });
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(3, total) }, () => worker()));
+    setAuditedLeadIds(current => new Set([...current, ...newlyAudited]));
+    setBulkMessage(`Bulk analysis finished: ${completed} completed, ${skipped} skipped${limitSkipped ? ` (${limitSkipped} due to plan limit)` : ''}, ${failed} failed.`);
+    await refreshProfile();
+    await loadData();
+    setBulkAnalyzing(false);
   }
 
   if (loading) return <LoadingSpinner message="Loading leads..." />;
@@ -523,11 +604,16 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       </div>}
       </div>
 
-      {selectedLeadIds.size > 0 && <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3 border-blue-500/30">
-        <div className="flex-1"><p className="text-white text-sm font-medium">{selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? '' : 's'} selected</p><p className="text-slate-500 text-xs mt-1">Only leads with an email address can be added to outreach campaigns.</p></div>
+      {selectedLeadIds.size > 0 && <div className="card p-4 flex flex-col gap-3 border-blue-500/30">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="flex-1"><p className="text-white text-sm font-medium">{selectedLeadIds.size} lead{selectedLeadIds.size === 1 ? '' : 's'} selected</p><p className="text-slate-500 text-xs mt-1">Analyze any selected lead. Campaigns only receive selected leads that have an email.</p></div>
+        <label className="flex items-center gap-2 text-xs text-slate-400 whitespace-nowrap"><input type="checkbox" checked={reanalyzeExisting} onChange={event => setReanalyzeExisting(event.target.checked)} disabled={bulkAnalyzing} className="accent-blue-500" /> Re-analyze existing</label>
+        <button disabled={bulkAnalyzing} onClick={() => void analyzeSelected()} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-50"><Zap className="w-4 h-4" /> {bulkAnalyzing ? `Analyzing ${bulkAnalyzeProgress.current} of ${bulkAnalyzeProgress.total}` : 'Analyze selected'}</button>
         <select className="select lg:w-72" value={targetCampaignId} onChange={event => setTargetCampaignId(event.target.value)}><option value="">Choose campaign...</option>{campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.name} ({campaign.status})</option>)}</select>
-        <button disabled={!targetCampaignId || addingToCampaign} onClick={() => void addSelectedToCampaign()} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"><Megaphone className="w-4 h-4" /> {addingToCampaign ? 'Adding...' : 'Add to campaign'}</button>
-        <button onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
+        <button disabled={!targetCampaignId || addingToCampaign || bulkAnalyzing} onClick={() => void addSelectedToCampaign()} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"><Megaphone className="w-4 h-4" /> {addingToCampaign ? 'Adding...' : 'Add to campaign'}</button>
+        <button disabled={bulkAnalyzing} onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
+        </div>
+        {bulkAnalyzing && <div><div className="h-1.5 rounded-full bg-slate-800 overflow-hidden"><div className="h-full bg-blue-500 transition-all" style={{ width: `${bulkAnalyzeProgress.total ? (bulkAnalyzeProgress.current / bulkAnalyzeProgress.total) * 100 : 0}%` }} /></div><p className="text-xs text-slate-500 mt-2">{bulkAnalyzeProgress.completed} completed · {bulkAnalyzeProgress.skipped} skipped · {bulkAnalyzeProgress.failed} failed</p></div>}
       </div>}
       <div className="rounded-xl border border-slate-800 bg-[#0d151f] p-4 flex flex-col lg:flex-row lg:items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0"><AtSign className="w-4 h-4 text-blue-400" /></div>
@@ -553,7 +639,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left pl-5 pr-1 py-3 text-slate-400 font-medium"><button onClick={toggleAllFiltered} disabled={!selectableFilteredIds.length} className={`w-5 h-5 rounded border flex items-center justify-center ${allFilteredSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-30`} title="Select all filtered leads with email">{allFilteredSelected && <Check className="w-3.5 h-3.5" />}</button></th>
+                  <th className="text-left pl-5 pr-1 py-3 text-slate-400 font-medium"><button onClick={toggleAllFiltered} disabled={!selectableFilteredIds.length || bulkAnalyzing} className={`w-5 h-5 rounded border flex items-center justify-center ${allFilteredSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-30`} title="Select all filtered leads">{allFilteredSelected && <Check className="w-3.5 h-3.5" />}</button></th>
                   <th className="text-left px-5 py-3 text-slate-400 font-medium">Business</th>
                   <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Industry</th>
                   <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Contact</th>
@@ -574,7 +660,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
                   return (
                     <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="pl-5 pr-1 py-3.5"><button onClick={() => toggleLeadSelection(lead.id)} disabled={!lead.email.trim()} className={`w-5 h-5 rounded border flex items-center justify-center ${selectedLeadIds.has(lead.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-25`} title={lead.email.trim() ? 'Select lead' : 'Email required'}>{selectedLeadIds.has(lead.id) && <Check className="w-3.5 h-3.5" />}</button></td>
+                    <td className="pl-5 pr-1 py-3.5"><button onClick={() => toggleLeadSelection(lead.id)} disabled={bulkAnalyzing} className={`w-5 h-5 rounded border flex items-center justify-center ${selectedLeadIds.has(lead.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-600'} disabled:opacity-25`} title="Select lead">{selectedLeadIds.has(lead.id) && <Check className="w-3.5 h-3.5" />}</button></td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="font-medium text-slate-200 truncate max-w-[180px]">{lead.business_name}</div>
