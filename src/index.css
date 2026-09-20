@@ -79,7 +79,6 @@
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #385246; border-radius: 99px; }
   .luxury-grid { background-image: none; }
-  .landing-grid { background-image: linear-gradient(rgba(148,163,184,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.035) 1px, transparent 1px); background-size: 64px 64px; mask-image: linear-gradient(to bottom, black, transparent 86%); }
   .luxury-orb { background: radial-gradient(circle, rgba(44,195,130,.16), transparent 68%); filter: blur(8px); }
 }
 
