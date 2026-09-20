@@ -69,8 +69,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   starter: {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 19,
-    yearlyPrice: 190,
+    monthlyPrice: 29,
+    yearlyPrice: 290,
     leadsLimit: 500,
     auditsLimit: 100,
     messagesLimit: 100,
@@ -89,8 +89,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 49,
-    yearlyPrice: 490,
+    monthlyPrice: 69,
+    yearlyPrice: 690,
     leadsLimit: 2500,
     auditsLimit: 500,
     messagesLimit: 500,
@@ -110,8 +110,8 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   agency: {
     id: 'agency',
     name: 'Agency',
-    monthlyPrice: 99,
-    yearlyPrice: 990,
+    monthlyPrice: 149,
+    yearlyPrice: 1490,
     leadsLimit: 10000,
     auditsLimit: 2000,
     messagesLimit: 2000,
@@ -169,7 +169,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   },
 };
 
-export const PLAN_DISPLAY_ORDER: PlanId[] = ['free_trial', 'starter', 'pro', 'agency', 'enterprise'];
+export const PLAN_DISPLAY_ORDER: PlanId[] = ['starter', 'pro', 'agency'];
 
 // Map plan IDs + billing cycles to Stripe price IDs.
 // Replace these with your actual Stripe price IDs from the Stripe dashboard.
