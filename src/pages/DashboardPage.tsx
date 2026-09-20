@@ -121,6 +121,19 @@ export function DashboardPage({ onNavigate }: Props) {
   const planName = profile ? PLANS[profile.current_plan]?.name ?? profile.current_plan : '';
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
 
+  async function loadAllLeads() {
+    const pageSize = 1000;
+    const allLeads: Lead[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const result = await supabase.from('leads').select('*').order('created_at', { ascending: false }).range(from, from + pageSize - 1);
+      if (result.error) return { data: null, error: result.error };
+      const page = (result.data as Lead[] | null) ?? [];
+      allLeads.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return { data: allLeads, error: null };
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -141,7 +154,7 @@ export function DashboardPage({ onNavigate }: Props) {
     try {
       const [leadsResult, searchesResult] = await Promise.allSettled([
         withTimeout(
-          supabase.from('leads').select('*').order('created_at', { ascending: false }),
+          loadAllLeads(),
           8000,
           'Leads loading timed out.'
         ),
@@ -265,12 +278,12 @@ export function DashboardPage({ onNavigate }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-[11px] uppercase tracking-[.16em] font-semibold text-blue-400 mb-2">Workspace overview</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Good to see you{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''} — here's your lead
-            overview.
+            Here is what is happening across your prospecting pipeline.
           </p>
         </div>
 
@@ -351,21 +364,21 @@ export function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-xl overflow-hidden border border-slate-800 bg-slate-800">
         {statCards.map((card) => (
-          <div key={card.label} className="card p-5">
+          <div key={card.label} className="bg-slate-900 p-5 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <p className="text-slate-400 text-sm">{card.label}</p>
               <div className={`w-9 h-9 rounded-lg ${card.bg} flex items-center justify-center`}>
                 <card.icon className={`w-[18px] h-[18px] ${card.color}`} />
               </div>
             </div>
-            <p className="text-3xl font-bold text-white">{card.value}</p>
+            <p className="text-3xl font-semibold tracking-tight text-white">{card.value.toLocaleString()}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[.8fr_1.1fr_1.1fr] gap-5">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-white font-semibold text-sm">Plan & Usage</h2>

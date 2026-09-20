@@ -44,9 +44,9 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
-        <BrandLogo className="h-8 w-auto object-contain" />
+        <BrandLogo className="h-11 w-auto object-contain" />
         <div>
-          <span className="block text-[9px] uppercase tracking-[.2em] text-slate-500 mt-1">Prospecting suite</span>
+          <span className="block text-[9px] uppercase tracking-[.2em] text-slate-500 mt-1">Revenue workspace</span>
         </div>
       </div>
 
@@ -79,8 +79,8 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
               onClick={() => nav(item.page)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
                 isActive
-                  ? 'bg-blue-600 text-slate-950 shadow-lg shadow-emerald-950/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  ? 'bg-slate-800 text-white border border-slate-700'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70'
               }`}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
@@ -153,7 +153,7 @@ export function Sidebar({ currentPage, onNavigate }: Props) {
         <SidebarContent />
       </aside>
 
-      <aside className="hidden lg:flex flex-col w-72 bg-slate-950/95 border-r border-slate-800 h-screen sticky top-0 flex-shrink-0">
+      <aside className="hidden lg:flex flex-col w-64 bg-[#090f17] border-r border-slate-800 h-screen sticky top-0 flex-shrink-0">
         <SidebarContent />
       </aside>
     </>
