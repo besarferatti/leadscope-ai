@@ -48,7 +48,7 @@ export function LandingPage({ onGetStarted, onLogin, onPricing, onAffiliate, onF
 
       <main>
         <section className="relative border-b border-slate-800">
-          <div className="absolute inset-0 landing-grid pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_72%_0%,rgba(44,182,125,.08),transparent_48%)] pointer-events-none" />
           <div className="max-w-7xl mx-auto px-5 sm:px-6 pt-20 pb-16 lg:pt-28 lg:pb-24 relative">
             <div className="grid lg:grid-cols-[.92fr_1.08fr] gap-14 lg:gap-16 items-center">
               <div>
