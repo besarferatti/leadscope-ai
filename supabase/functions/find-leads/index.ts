@@ -436,6 +436,7 @@ Deno.serve(async (req: Request) => {
 
     if (!cache_hit) {
       const cacheablePlaces = rawResults.filter((place) => Boolean(place.place_id));
+
       if (cacheablePlaces.length > 0) {
         const directoryRows = cacheablePlaces.map((place) => ({
           google_place_id: place.place_id!,
