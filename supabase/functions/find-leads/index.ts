@@ -49,6 +49,7 @@ type TextSearchPage = {
 const GOOGLE_PLACES_PAGE_SIZE = 20;
 const DEFAULT_MAX_PAGES = 3;
 const DEFAULT_MAX_RESULTS_SCANNED = 60;
+const SEARCH_CACHE_TTL_DAYS = 30;
 
 const WEBSITE_STATUS_FILTERS = new Set<WebsiteStatusFilter>([
   "all",
@@ -119,6 +120,43 @@ function normalizeKey(value?: string | null) {
 
 function normalizePhone(value?: string | null) {
   return (value ?? "").replace(/\D/g, "");
+}
+
+function normalizeSearchPart(value?: string | null) {
+  return normalizeKey(value).replace(/\s+/g, " ");
+}
+
+type CachedBusiness = {
+  google_place_id: string;
+  business_name: string;
+  formatted_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  rating?: number | null;
+  reviews_count?: number | null;
+  types?: string[] | null;
+  primary_type?: string | null;
+  primary_type_display_name?: string | null;
+  website?: string | null;
+  phone?: string | null;
+};
+
+function cachedBusinessToGooglePlace(business: CachedBusiness): GooglePlace {
+  return {
+    name: business.business_name,
+    formatted_address: business.formatted_address ?? undefined,
+    geometry: business.latitude != null && business.longitude != null
+      ? { location: { lat: Number(business.latitude), lng: Number(business.longitude) } }
+      : undefined,
+    rating: business.rating == null ? undefined : Number(business.rating),
+    user_ratings_total: business.reviews_count ?? undefined,
+    place_id: business.google_place_id,
+    types: business.types ?? undefined,
+    primaryType: business.primary_type ?? undefined,
+    primaryTypeDisplayName: business.primary_type_display_name ?? undefined,
+    website: business.website ?? undefined,
+    international_phone_number: business.phone ?? undefined,
+  };
 }
 
 function getGoogleCategory(place: { primaryTypeDisplayName?: { text?: string } | string }) {
@@ -241,14 +279,11 @@ Deno.serve(async (req: Request) => {
 
     const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
 
-    if (!apiKey) {
-      return errorResponse("Google Places API key is not configured on the server.", 500);
-    }
-
     const maxPages = DEFAULT_MAX_PAGES;
     const maxResultsScanned = DEFAULT_MAX_RESULTS_SCANNED;
 
     async function fetchPlacesPage(pageToken?: string): Promise<TextSearchPage> {
+      if (!apiKey) throw new Error("Google Places API key is not configured on the server.");
       const fields = [
         "places.id",
         "places.displayName",
@@ -344,65 +379,45 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    async function fetchPlaceDetails(place: GooglePlace): Promise<GooglePlace> {
-      if (!place.place_id) return place;
-
-      try {
-        const newDetailsUrl = `https://places.googleapis.com/v1/places/${place.place_id}`;
-        const newDetailsRes = await fetch(newDetailsUrl, {
-          headers: {
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": "primaryType,primaryTypeDisplayName,types,websiteUri,nationalPhoneNumber,internationalPhoneNumber",
-          },
-        });
-
-        if (newDetailsRes.ok) {
-          const newDetails = await newDetailsRes.json() as {
-            primaryType?: string;
-            primaryTypeDisplayName?: { text?: string; languageCode?: string } | string;
-            types?: string[];
-            websiteUri?: string;
-            nationalPhoneNumber?: string;
-            internationalPhoneNumber?: string;
-          };
-
-          place = {
-            ...place,
-            primaryType: newDetails.primaryType ?? place.primaryType,
-            primaryTypeDisplayName: newDetails.primaryTypeDisplayName ?? place.primaryTypeDisplayName,
-            types: newDetails.types ?? place.types,
-            website: newDetails.websiteUri ?? place.website,
-            formatted_phone_number: newDetails.nationalPhoneNumber ?? place.formatted_phone_number,
-            international_phone_number: newDetails.internationalPhoneNumber ?? place.international_phone_number,
-          };
-        }
-      } catch {
-        // Fall back to legacy details below.
-      }
-
-      try {
-        const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,international_phone_number,website,rating,user_ratings_total,url,types&key=${apiKey}`;
-        const detailRes = await fetch(detailUrl);
-        if (!detailRes.ok) return place;
-        const detailData = await detailRes.json() as { status: string; result?: GooglePlace };
-        if (detailData.status === "OK" && detailData.result) {
-          return { ...place, ...detailData.result };
-        }
-      } catch {
-        // fall through to original place data
-      }
-
-      return place;
-    }
-
     const detailedResults: GooglePlace[] = [];
+    const rawResults: GooglePlace[] = [];
     let pageToken: string | undefined;
     let pages_fetched = 0;
     let scanned = 0;
     let matched_website_status = 0;
     let filtered_out_by_website_status = 0;
+    let cache_hit = false;
 
-    while (pages_fetched < maxPages && scanned < maxResultsScanned) {
+    const normalizedNiche = normalizeSearchPart(niche);
+    const normalizedLocation = normalizeSearchPart(location);
+    const cacheFreshAfter = new Date(Date.now() - SEARCH_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: cachedSearch } = await supabase
+      .from("place_search_cache")
+      .select("place_ids")
+      .eq("niche_normalized", normalizedNiche)
+      .eq("location_normalized", normalizedLocation)
+      .gte("refreshed_at", cacheFreshAfter)
+      .maybeSingle();
+
+    const cachedPlaceIds = ((cachedSearch?.place_ids ?? []) as string[]).filter(Boolean);
+    if (cachedSearch && cachedPlaceIds.length === 0) {
+      cache_hit = true;
+    } else if (cachedPlaceIds.length > 0) {
+      const { data: cachedBusinesses } = await supabase
+        .from("business_directory")
+        .select("google_place_id, business_name, formatted_address, latitude, longitude, rating, reviews_count, types, primary_type, primary_type_display_name, website, phone")
+        .in("google_place_id", cachedPlaceIds);
+      const byPlaceId = new Map(
+        ((cachedBusinesses ?? []) as CachedBusiness[]).map((business) => [business.google_place_id, business])
+      );
+      if (cachedPlaceIds.every((placeId) => byPlaceId.has(placeId))) {
+        rawResults.push(...cachedPlaceIds.map((placeId) => cachedBusinessToGooglePlace(byPlaceId.get(placeId)!)));
+        scanned = rawResults.length;
+        cache_hit = true;
+      }
+    }
+
+    while (!cache_hit && pages_fetched < maxPages && scanned < maxResultsScanned) {
       const page = await fetchPlacesPage(pageToken);
       pages_fetched++;
 
@@ -410,25 +425,58 @@ Deno.serve(async (req: Request) => {
       const pageResults = page.results.slice(0, remainingScanSlots);
       scanned += pageResults.length;
 
-      const detailedPageResults = await Promise.all(pageResults.map(fetchPlaceDetails));
-
-      for (const place of detailedPageResults) {
-        const leadWebsite = (place.website ?? "").trim();
-        const websiteStatus = getWebsiteStatus(leadWebsite);
-
-        if (matchesWebsiteStatusFilter(websiteStatus, websiteStatusFilter)) {
-          matched_website_status++;
-          detailedResults.push(place);
-        } else {
-          filtered_out_by_website_status++;
-        }
-      }
+      rawResults.push(...pageResults);
 
       if (!page.nextPageToken || scanned >= maxResultsScanned) {
         break;
       }
 
       pageToken = page.nextPageToken;
+    }
+
+    if (!cache_hit) {
+      const cacheablePlaces = rawResults.filter((place) => Boolean(place.place_id));
+      if (cacheablePlaces.length > 0) {
+        const directoryRows = cacheablePlaces.map((place) => ({
+          google_place_id: place.place_id!,
+          business_name: place.name,
+          formatted_address: place.formatted_address ?? "",
+          latitude: place.geometry?.location.lat ?? null,
+          longitude: place.geometry?.location.lng ?? null,
+          rating: place.rating ?? null,
+          reviews_count: place.user_ratings_total ?? 0,
+          types: place.types ?? [],
+          primary_type: place.primaryType ?? "",
+          primary_type_display_name: getGoogleCategory(place),
+          website: place.website ?? "",
+          phone: place.international_phone_number ?? place.formatted_phone_number ?? "",
+          refreshed_at: new Date().toISOString(),
+        }));
+        const { error: directoryError } = await supabase
+          .from("business_directory")
+          .upsert(directoryRows, { onConflict: "google_place_id" });
+        if (directoryError) console.error("Failed to update business directory cache", directoryError);
+      }
+
+      const { error: searchCacheError } = await supabase
+        .from("place_search_cache")
+        .upsert({
+          niche_normalized: normalizedNiche,
+          location_normalized: normalizedLocation,
+          place_ids: cacheablePlaces.map((place) => place.place_id!),
+          refreshed_at: new Date().toISOString(),
+        }, { onConflict: "niche_normalized,location_normalized" });
+      if (searchCacheError) console.error("Failed to update place search cache", searchCacheError);
+    }
+
+    for (const place of rawResults) {
+      const websiteStatus = getWebsiteStatus(place.website);
+      if (matchesWebsiteStatusFilter(websiteStatus, websiteStatusFilter)) {
+        matched_website_status++;
+        detailedResults.push(place);
+      } else {
+        filtered_out_by_website_status++;
+      }
     }
 
     if (scanned === 0) {
@@ -448,6 +496,7 @@ Deno.serve(async (req: Request) => {
         pages_fetched,
         scanned,
         matched_website_status,
+        cache_hit,
         message: "No leads found for this search query.",
       });
     }
@@ -642,6 +691,7 @@ Deno.serve(async (req: Request) => {
       pages_fetched,
       scanned,
       matched_website_status,
+      cache_hit,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Something went wrong while searching.";
