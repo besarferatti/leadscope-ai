@@ -14,6 +14,7 @@ type SenderIdentity = { name: string; position: string; agencyName: string; agen
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
 type Audit = { website_score: number; seo_score: number; conversion_score: number; main_issues: string[]; recommended_offer: string; personalization_angle: string };
 type OutreachPayload = { subject: string; body: string };
+type OutreachStyle = "natural_helpful" | "direct_concise" | "founder_to_founder";
 
 const messageLimits: Record<PlanId, number> = { free_trial: 25, starter: 100, pro: 500, agency: 2000, enterprise: -1, admin_unlimited: -1 };
 
@@ -75,6 +76,19 @@ function enforceMessageLimit(profile: UserProfile): string | null {
   return null;
 }
 
+const bannedOpenings = [
+  "i came across your website",
+  "i was browsing your website",
+  "i hope this email finds you well",
+  "i noticed your business",
+];
+
+function styleInstructions(style: OutreachStyle) {
+  if (style === "direct_concise") return "Be direct and economical. Lead with the concrete observation, explain one business consequence, then ask one short question. Avoid warm-up language.";
+  if (style === "founder_to_founder") return "Write peer-to-peer, like one business owner sharing a useful observation with another. Be candid, calm, and practical; never sound like a salesperson or pretend you know them personally.";
+  return "Sound warm, observant, and helpful. Connect one real observation to a practical improvement without pressure or exaggerated praise.";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   try {
@@ -89,8 +103,9 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return errorResponse("Unauthorized", 401);
 
-    const body = await req.json() as { lead_id?: string; channel?: "email" | "dm"; language?: string; tone?: string };
+    const body = await req.json() as { lead_id?: string; channel?: "email" | "dm"; language?: string; tone?: string; style?: OutreachStyle };
     const { lead_id, channel, language, tone } = body;
+    const style: OutreachStyle = ["natural_helpful", "direct_concise", "founder_to_founder"].includes(body.style ?? "") ? body.style! : "natural_helpful";
     if (!lead_id || !channel || !language || !tone) return errorResponse("lead_id, channel, language, and tone are required");
     if (channel !== "email" && channel !== "dm") return errorResponse("channel must be either email or dm");
 
@@ -124,14 +139,14 @@ Deno.serve(async (req: Request) => {
 
     const { data: audit } = await serviceClient.from("lead_audits").select("website_score, seo_score, conversion_score, main_issues, recommended_offer, personalization_angle").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
-    const auditContext = typedAudit ? `Website audit: website score ${typedAudit.website_score}/100, SEO score ${typedAudit.seo_score}/100, conversion score ${typedAudit.conversion_score}/100. Main issues: ${typedAudit.main_issues.join(", ")}. Recommended offer: ${typedAudit.recommended_offer}. Personalization angle: ${typedAudit.personalization_angle}.` : "";
+    const auditContext = typedAudit ? `Verified audit evidence: website score ${typedAudit.website_score}/100, SEO score ${typedAudit.seo_score}/100, conversion score ${typedAudit.conversion_score}/100. Main issues: ${typedAudit.main_issues.join(", ")}. Recommended offer: ${typedAudit.recommended_offer}. Personalization angle: ${typedAudit.personalization_angle}.` : "No website audit is available. Do not imply that you visited, reviewed, browsed, or analyzed the website.";
     const senderContext = `Sender information for the signature:
 Name: ${sender.name || "missing"}
 Position: ${sender.position || "missing"}
 Agency name: ${sender.agencyName || "missing"}
 Agency website: ${sender.agencyWebsite || "missing"}
 Phone: ${sender.phone || "missing"}`;
-    const prompt = `You write concise, human cold outreach for a digital agency. Write a ${tone.toLowerCase()} ${channel} in ${language} for this prospect.
+    const prompt = `You write concise, genuinely human cold outreach for a digital agency. Write a ${tone.toLowerCase()} ${channel} in ${language} for this prospect.
 
 Prospect:
 - Business: ${typedLead.business_name}
@@ -144,12 +159,16 @@ ${auditContext}
 ${senderContext}
 
 Rules:
-- Sound like a real person who briefly researched the business, never like an AI-generated sales template.
+- Style: ${styleInstructions(style)}
+- Sound like a real person, never like an AI-generated sales template.
 - Use only facts supplied above. Never invent a technical problem, result, relationship, compliment, or claim.
-- Mention at most ONE specific, high-confidence observation from the audit.
+- Build the message around ONE specific, high-confidence observation. Prefer, in order: a supported audit issue; no website; a supported missing CTA/booking/contact path; a local SEO opportunity. Use rating/review count only when it naturally supports the point.
+- If no audit exists, use only directory facts such as business type, location, website availability, rating, and review count. Never pretend the website was reviewed.
 - Do not dump audit findings, scores, technical checklists, pricing, deliverables, or a full proposal.
 - Focus on the business outcome, not technical jargon.
-- Keep the opening natural. Avoid "I hope this message finds you well", "I was impressed", and exaggerated praise.
+- Never open with or use: "I came across your website", "I was browsing your website", "I hope this email finds you well", or "I noticed your business".
+- Do not use fake compliments, generic praise, or phrases such as "impressive online presence".
+- Open directly with the concrete observation or the context in which the business was found. Vary sentence structure naturally.
 - Use one clear offer and ONE low-friction CTA.
 - Do not promise results.
 - Use the sender information in the signature. Never use placeholders. Omit missing sender fields.
@@ -164,10 +183,16 @@ Return raw JSON only (no markdown):
   "subject": "<${channel === "dm" ? "empty string" : "short specific subject"}>",
   "body": "<concise personalized message and sign-off using only available sender information>"
 }`;
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.45, max_tokens: 450 }) });
-    if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); return errorResponse((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`, 502); }
-    const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
-    const parsed = JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as OutreachPayload;
+    async function generate(extraInstruction = "") {
+      const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: `${prompt}${extraInstruction}` }], temperature: 0.65, max_tokens: 450, response_format: { type: "json_object" } }) });
+      if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); throw new Error((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`); }
+      const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
+      return JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as OutreachPayload;
+    }
+    let parsed = await generate();
+    if (bannedOpenings.some(opening => (parsed.body ?? "").toLowerCase().includes(opening))) {
+      parsed = await generate("\nYour previous draft used a banned generic phrase. Rewrite with a specific, evidence-based opening and obey every banned-phrase rule.");
+    }
     const sanitizedBody = applySenderIdentity(parsed.body ?? "", sender);
     const sanitizedSubject = applySenderIdentity(parsed.subject ?? "", sender, false).replace(/\n+/g, " ").trim();
     const { data: message, error: insertError } = await serviceClient.from("outreach_messages").insert({ lead_id, channel, language, tone, subject: sanitizedSubject, body: sanitizedBody }).select("*").single();

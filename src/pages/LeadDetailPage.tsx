@@ -63,6 +63,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [msgChannel, setMsgChannel] = useState<'email' | 'dm'>('email');
   const [msgLanguage, setMsgLanguage] = useState('English');
   const [msgTone, setMsgTone] = useState('Professional');
+  const [msgStyle, setMsgStyle] = useState<'natural_helpful' | 'direct_concise' | 'founder_to_founder'>('natural_helpful');
 
   useEffect(() => {
     loadAll();
@@ -200,13 +201,14 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
           channel: msgChannel,
           language: msgLanguage,
           tone: msgTone,
+          style: msgStyle,
         },
       });
 
       if (functionError) throw new Error(functionError.message);
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
-      trackEvent('outreach_message_generated', { lead_id: leadId, channel: msgChannel, language: msgLanguage, tone: msgTone });
+      trackEvent('outreach_message_generated', { lead_id: leadId, channel: msgChannel, language: msgLanguage, tone: msgTone, style: msgStyle });
       await refreshProfile();
       await loadAll();
       setMsgExpanded('new');
@@ -921,7 +923,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
           <div className="card">
             <div className="p-5 border-b border-slate-800">
               <h2 className="text-white font-semibold mb-4">Outreach Messages</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div>
                   <label className="block text-slate-400 text-xs mb-1">Channel</label>
                   <select className="select text-xs py-1.5" value={msgChannel} onChange={e => setMsgChannel(e.target.value as 'email' | 'dm')}>
@@ -939,6 +941,14 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   <label className="block text-slate-400 text-xs mb-1">Tone</label>
                   <select className="select text-xs py-1.5" value={msgTone} onChange={e => setMsgTone(e.target.value)}>
                     {TONES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-xs mb-1">Style</label>
+                  <select className="select text-xs py-1.5" value={msgStyle} onChange={e => setMsgStyle(e.target.value as typeof msgStyle)}>
+                    <option value="natural_helpful">Natural &amp; helpful</option>
+                    <option value="direct_concise">Direct &amp; concise</option>
+                    <option value="founder_to_founder">Founder-to-founder</option>
                   </select>
                 </div>
                 <div className="flex items-end">
