@@ -215,7 +215,7 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
         </div>
 
         {/* Plans grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {PLAN_DISPLAY_ORDER.map(planId => {
             const plan = PLANS[planId];
             const isPopular = plan.popular;
@@ -327,9 +327,22 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
           })}
         </div>
 
+        <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-900 p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="max-w-2xl">
+            <p className="text-xs uppercase tracking-[.16em] font-semibold text-blue-400">Enterprise</p>
+            <h2 className="text-2xl font-semibold text-white mt-2">Custom volume, integrations, and support.</h2>
+            <p className="text-slate-400 text-sm leading-relaxed mt-3">
+              Custom usage limits, API access, white-label reports, dedicated onboarding, and pricing built around your workflow.
+            </p>
+          </div>
+          <button onClick={() => handleSelect('enterprise')} className="btn-secondary px-6 py-3 shrink-0">
+            Contact sales
+          </button>
+        </div>
+
         {/* Footer note */}
         <p className="text-center text-slate-600 text-sm mt-10">
-          All plans include a 7-day free trial. No credit card required to start. Cancel anytime.
+          Every paid plan starts with a 7-day free trial. No credit card required to start. Cancel anytime.
         </p>
       </div>
     </div>
