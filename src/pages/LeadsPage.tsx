@@ -14,7 +14,7 @@ import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type WebsiteStatus } from '../lib/utils';
 import {
-  canGenerateLead, canExportCSV, canUseBulkActions, isAdmin, incrementUsage,
+  canGenerateLead, canExportCSV, isAdmin, incrementUsage,
 } from '../lib/plans';
 
 interface Props {
@@ -65,12 +65,12 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
   const [addingToCampaign, setAddingToCampaign] = useState(false);
   const [bulkMessage, setBulkMessage] = useState('');
   const [emailQueueing, setEmailQueueing] = useState(false);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const autoDiscoveryStartedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const csvAllowed = canExportCSV(profile);
-  const bulkAllowed = canUseBulkActions(profile);
 
   useEffect(() => {
     console.log('[LeadsPage] component mounted');
@@ -366,10 +366,11 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
         />
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Leads</h1>
-          <p className="text-slate-400 text-sm mt-1">{leads.length} total leads</p>
+          <p className="text-[11px] uppercase tracking-[.16em] font-semibold text-blue-400 mb-2">Prospect database</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Leads</h1>
+          <p className="text-slate-400 text-sm mt-1">{leads.length.toLocaleString()} businesses in your workspace</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
@@ -393,9 +394,6 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
               </div>
             )}
           </div>
-          {bulkAllowed && (
-            <span className="badge bg-violet-500/20 text-violet-400 text-xs">Bulk Actions Enabled</span>
-          )}
           <button onClick={() => setShowForm(!showForm)} className="btn-primary text-xs py-2">
             <Plus className="w-3.5 h-3.5" /> Add Lead
           </button>
@@ -458,6 +456,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
         </div>
       )}
 
+      <div className="card p-3 sm:p-4">
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -476,6 +475,16 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="">All Searches</option>
           {searches.map(s => <option key={s.id} value={s.id}>{s.niche} — {s.location}</option>)}
         </select>
+        <button onClick={() => setShowMoreFilters(value => !value)} className={`btn-secondary whitespace-nowrap ${showMoreFilters ? 'border-blue-500/30 text-blue-300' : ''}`}>
+          <Filter className="w-4 h-4" /> More filters
+        </button>
+        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus || filterSaved !== 'all' || filterCity || filterIndustry || filterEmail !== 'all' || filterMinScore > 0) && (
+          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); setFilterSaved('all'); setFilterCity(''); setFilterIndustry(''); setFilterEmail('all'); setFilterMinScore(0); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors px-2">
+            <X className="w-3.5 h-3.5" /> Clear
+          </button>
+        )}
+      </div>
+      {showMoreFilters && <div className="flex flex-wrap gap-3 items-center mt-3 pt-3 border-t border-slate-800">
         <select className="select w-auto" value={filterCity} onChange={e => setFilterCity(e.target.value)}>
           <option value="">All Cities</option>
           {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
@@ -511,11 +520,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
           <option value="lead_score">Highest Score</option>
           <option value="business_name">A → Z</option>
         </select>
-        {(filterStatus || filterSearch || filterQuery || filterWebsiteStatus || filterSaved !== 'all' || filterCity || filterIndustry || filterEmail !== 'all' || filterMinScore > 0) && (
-          <button onClick={() => { setFilterStatus(''); setFilterSearch(''); setFilterQuery(''); setFilterWebsiteStatus(''); setFilterSaved('all'); setFilterCity(''); setFilterIndustry(''); setFilterEmail('all'); setFilterMinScore(0); }} className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors">
-            <X className="w-3.5 h-3.5" /> Clear
-          </button>
-        )}
+      </div>}
       </div>
 
       {selectedLeadIds.size > 0 && <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3 border-blue-500/30">
@@ -524,8 +529,9 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
         <button disabled={!targetCampaignId || addingToCampaign} onClick={() => void addSelectedToCampaign()} className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50"><Megaphone className="w-4 h-4" /> {addingToCampaign ? 'Adding...' : 'Add to campaign'}</button>
         <button onClick={() => setSelectedLeadIds(new Set())} className="btn-secondary">Clear</button>
       </div>}
-      <div className="card p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="flex-1"><p className="text-white text-sm font-medium">Background email discovery</p><p className="text-slate-500 text-xs mt-1">Queues every filtered lead that has not been checked. Processing continues safely after this tab is closed.</p></div>
+      <div className="rounded-xl border border-slate-800 bg-[#0d151f] p-4 flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0"><AtSign className="w-4 h-4 text-blue-400" /></div>
+        <div className="flex-1"><p className="text-white text-sm font-medium">Email discovery queue</p><p className="text-slate-500 text-xs mt-1">Add unchecked leads to the background queue. You can safely close this tab.</p></div>
         <button disabled={emailQueueing || discoverableFilteredIds.length === 0} onClick={() => void runEmailDiscovery(discoverableFilteredIds)} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-40">{emailQueueing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AtSign className="w-4 h-4" />} {emailQueueing ? 'Adding to queue...' : `Queue missing emails (${discoverableFilteredIds.length})`}</button>
       </div>
       {bulkMessage && <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-emerald-300 text-sm flex items-center gap-2"><Check className="w-4 h-4" /> {bulkMessage}</div>}
