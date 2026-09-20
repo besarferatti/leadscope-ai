@@ -144,6 +144,7 @@ export function DashboardPage({ onNavigate }: Props) {
       setStats({
         totalLeads: 0,
         totalSearches: 0,
+        analyzedLeads: 0,
         avgScore: 0,
         interestedLeads: 0,
       });
@@ -233,6 +234,7 @@ export function DashboardPage({ onNavigate }: Props) {
       setStats({
         totalLeads: 0,
         totalSearches: 0,
+        analyzedLeads: 0,
         avgScore: 0,
         interestedLeads: 0,
       });
