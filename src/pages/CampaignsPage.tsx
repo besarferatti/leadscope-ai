@@ -53,10 +53,10 @@ export function CampaignsPage() {
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (options: { silent?: boolean; preserveError?: boolean } = {}) => {
     if (!user) { setLoading(false); return; }
-    setLoading(true);
-    setError('');
+    if (!options.silent) setLoading(true);
+    if (!options.preserveError) setError('');
     const [{ data: campaignData, error: campaignError }, { data: leadData, error: leadError }] = await Promise.all([
       supabase.from('outreach_campaigns').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       supabase.from('leads').select('*').eq('user_id', user.id).not('email', 'is', null).neq('email', '').order('lead_score', { ascending: false }),
@@ -291,7 +291,10 @@ export function CampaignsPage() {
     } finally {
       setProgress('');
       setCampaignBusy(null);
-      await Promise.all([loadCampaignMembers(campaign.id), loadData()]);
+      await Promise.all([
+        loadCampaignMembers(campaign.id),
+        loadData({ silent: true, preserveError: true }),
+      ]);
     }
   }
 
@@ -335,7 +338,7 @@ export function CampaignsPage() {
           </div>
             <div className="flex flex-wrap gap-2 my-4">
               <button disabled={campaignBusy === campaign.id || !(membersByCampaign[campaign.id] ?? []).some(member => member.status === 'pending')} onClick={() => void prepareMessages(campaign)} className="btn-secondary text-sm flex items-center gap-2 disabled:opacity-40"><Sparkles className="w-4 h-4" /> Prepare next 10</button>
-              <button disabled={campaignBusy === campaign.id || !(membersByCampaign[campaign.id] ?? []).some(member => member.status === 'approved')} onClick={() => void sendApproved(campaign)} className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"><Send className="w-4 h-4" /> Send approved</button>
+              <button type="button" disabled={campaignBusy === campaign.id || !(membersByCampaign[campaign.id] ?? []).some(member => member.status === 'approved')} onClick={() => void sendApproved(campaign)} className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"><Send className="w-4 h-4" /> Send approved</button>
               {campaignBusy === campaign.id && <span className="text-blue-300 text-xs flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {progress}</span>}
             </div>
             <div className="border border-slate-800 rounded-xl overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-900 text-slate-500 text-xs uppercase"><tr><th className="p-3">Lead</th><th className="p-3">Message</th><th className="p-3">Status</th><th className="p-3">Action</th></tr></thead><tbody className="divide-y divide-slate-800">
