@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Ban, Check, ChevronDown, ChevronUp, Loader2, Mail, Megaphone, Pause, Play, Plus, Search, Send, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronUp, Loader2, Mail, Megaphone, Pause, Play, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -52,6 +52,7 @@ export function CampaignsPage() {
   const [campaignBusy, setCampaignBusy] = useState<string | null>(null);
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
+  const [syncingReplies, setSyncingReplies] = useState(false);
 
   const loadData = useCallback(async (options: { silent?: boolean; preserveError?: boolean } = {}) => {
     if (!user) { setLoading(false); return; }
@@ -108,6 +109,27 @@ export function CampaignsPage() {
   function resetForm() {
     setName(''); setMode('review'); setLanguage('English'); setTone('Professional');
     setDailyLimit(10); setSelectedLeadIds(new Set()); setSearch(''); setShowCreate(false);
+  }
+
+  async function syncReplies() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) { setError('Please sign in again before syncing replies.'); return; }
+    setSyncingReplies(true);
+    setError('');
+    try {
+      const response = await fetch('/api/sync-outreach-replies', {
+        method: 'POST', headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; matched?: number };
+      if (!response.ok) throw new Error(result.error ?? 'Unable to sync replies.');
+      await loadData({ silent: true, preserveError: true });
+      if (expandedId) await loadCampaignMembers(expandedId);
+      setProgress(result.matched ? `${result.matched} reply${result.matched === 1 ? '' : 'ies'} matched.` : 'Inbox checked. No new replies found.');
+      window.setTimeout(() => setProgress(''), 5000);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : 'Unable to sync replies.');
+    } finally { setSyncingReplies(false); }
   }
 
   async function createCampaign() {
@@ -303,7 +325,10 @@ export function CampaignsPage() {
   return <div className="max-w-7xl mx-auto">
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div><h1 className="text-2xl font-bold text-white">Campaigns</h1><p className="text-slate-400 mt-1">Organize personalized outreach and follow-ups without losing control.</p></div>
-      <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> New campaign</button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={syncingReplies} onClick={() => void syncReplies()} className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${syncingReplies ? 'animate-spin' : ''}`} /> {syncingReplies ? 'Syncing...' : 'Sync replies'}</button>
+        <button type="button" onClick={() => setShowCreate(true)} className="btn-primary flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> New campaign</button>
+      </div>
     </div>
 
     {error && <div className="mb-5"><ErrorAlert message={error} /></div>}
