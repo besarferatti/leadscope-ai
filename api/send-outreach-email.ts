@@ -126,13 +126,29 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   let campaignLead: { id: string; campaign_id: string; status: string } | null = null;
   let campaign: { id: string; status: string; daily_limit: number } | null = null;
   if (campaignLeadId) {
-    const { data: member } = await supabaseAdmin
+    const { data: memberById, error: memberByIdError } = await supabaseAdmin
       .from('outreach_campaign_leads')
       .select('id, campaign_id, lead_id, status, outreach_message_id')
       .eq('id', campaignLeadId)
-      .eq('lead_id', leadId)
       .maybeSingle();
-    if (!member) return errorResponse(res, 'Campaign lead not found.', 404);
+    if (memberByIdError) return errorResponse(res, 'Unable to verify the campaign lead.', 500);
+
+    let member = memberById;
+    if (!member && outreachMessageId) {
+      const { data: matchingMembers, error: matchingMemberError } = await supabaseAdmin
+        .from('outreach_campaign_leads')
+        .select('id, campaign_id, lead_id, status, outreach_message_id')
+        .eq('lead_id', leadId)
+        .eq('outreach_message_id', outreachMessageId)
+        .eq('status', 'approved')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (matchingMemberError) return errorResponse(res, 'Unable to verify the approved campaign message.', 500);
+      member = matchingMembers?.[0] ?? null;
+    }
+
+    if (!member) return errorResponse(res, 'Approved campaign lead not found. Refresh the campaign and try again.', 404);
+    if (member.lead_id !== leadId) return errorResponse(res, 'Campaign lead does not match the selected lead.', 409);
     if (member.status !== 'approved') return errorResponse(res, 'Campaign message is not approved.', 409);
     if (!outreachMessageId || member.outreach_message_id !== outreachMessageId) {
       return errorResponse(res, 'Campaign message does not match the approved message. Refresh the campaign and try again.', 409);
