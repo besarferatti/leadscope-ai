@@ -1,6 +1,6 @@
 import { productUpdates } from '../src/data/productUpdates.js';
-import { errorResponse, isTooLarge, PLATFORMS, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from './social-media-helpers.js';
-import { renderSocialTextSvg, socialCardChrome } from './social-card-renderer.js';
+import { errorResponse, isTooLarge, PLATFORMS, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from '../server/social-media-helpers.js';
+import { renderSocialTextSvg, socialCardChrome } from '../server/social-card-renderer.js';
 
 type Captions = Record<Platform, { caption: string; title?: string }>;
 const UPDATE_URL = 'https://www.leadscope.pro/updates';
