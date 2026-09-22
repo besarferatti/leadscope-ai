@@ -229,14 +229,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   };
 
   try {
-    await transporter.sendMail({
+    const delivery = await transporter.sendMail({
       from,
       replyTo: settings.reply_to_email?.trim() || undefined,
       to: toEmail,
       subject,
       text: body,
     });
-    const { error: logError } = await supabaseAdmin.from('outreach_email_sends').insert({ ...sendLog, status: 'sent', sent_at: new Date().toISOString() });
+    const { error: logError } = await supabaseAdmin.from('outreach_email_sends').insert({
+      ...sendLog,
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      provider_message_id: delivery.messageId || null,
+    });
     if (logError) return errorResponse(res, 'Email was sent, but the send log could not be saved.', 500);
 
     await supabaseAdmin.from('leads').update({ status: 'Contacted' }).eq('id', leadId).eq('user_id', user.id);
