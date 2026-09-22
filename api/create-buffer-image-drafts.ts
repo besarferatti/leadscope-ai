@@ -1,4 +1,4 @@
-import { buffer, errorResponse, getBufferOrganizationsAndChannels, isTooLarge, platformForService, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from './social-media-helpers.js';
+import { buffer, errorResponse, getBufferOrganizationsAndChannels, isTooLarge, platformForService, requireAdmin, safeText, type ApiRequest, type ApiResponse, type Platform } from '../server/social-media-helpers.js';
 
 type Post = { platform?: unknown; channelId?: unknown; caption?: unknown; title?: unknown; imageUrl?: unknown };
 const MAX = { linkedin: 3000, x: 280, tiktok: 2200 } as const;
