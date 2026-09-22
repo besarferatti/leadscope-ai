@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getFreshAccessToken } from './supabase';
 
 export interface EmailDiscoveryProgress {
   completed: number;
@@ -15,9 +15,7 @@ export async function discoverLeadEmails(
   onProgress?: (progress: EmailDiscoveryProgress) => void,
   concurrency = 3,
 ) {
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) throw new Error('Please sign in again before finding emails.');
+  const accessToken = await getFreshAccessToken();
 
   const progress: EmailDiscoveryProgress = { completed: 0, total: leadIds.length, found: 0, notFound: 0, failed: 0 };
   onProgress?.({ ...progress });
@@ -33,6 +31,7 @@ export async function discoverLeadEmails(
           body: JSON.stringify({ leadId }),
         });
         const result = await response.json() as DiscoveryResult;
+        if (response.status === 401) throw new Error('Your session has expired. Please sign in again.');
         if (!response.ok) progress.failed += 1;
         else if (result.status === 'found') progress.found += 1;
         else progress.notFound += 1;
