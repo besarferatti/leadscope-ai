@@ -1,4 +1,4 @@
-import { errorResponse, getBufferOrganizationsAndChannels, platformForService, requireAdmin, type ApiRequest, type ApiResponse } from './social-media-helpers.js';
+import { errorResponse, getBufferOrganizationsAndChannels, platformForService, requireAdmin, type ApiRequest, type ApiResponse } from '../server/social-media-helpers.js';
 
 export const config = { runtime: 'nodejs' };
 export default async function handler(req: ApiRequest, res: ApiResponse) {
