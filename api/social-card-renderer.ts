@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { createElement, type CSSProperties, type ReactNode } from 'react';
 import satori from 'satori';
 
 export type SocialCardPlatform = 'linkedin' | 'x' | 'tiktok';
@@ -38,12 +39,9 @@ async function loadFonts(): Promise<Font[]> {
 
 const h = (
   type: string,
-  style: Record<string, unknown>,
-  ...children: unknown[]
-) => ({
-  type,
-  props: { style, children },
-});
+  style: CSSProperties,
+  ...children: ReactNode[]
+) => createElement(type, { style }, ...children);
 const words = (value: string) => value.trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
 export function shorten(value: string, maximum: number): string {
   if (value.length <= maximum) return value;
@@ -52,7 +50,7 @@ export function shorten(value: string, maximum: number): string {
   return `${result.join(' ')}…`;
 }
 
-function text(value: string, style: Record<string, unknown>) { return h('div', { ...style, display: 'flex' }, value); }
+function text(value: string, style: CSSProperties) { return h('div', { ...style, display: 'flex' }, value); }
 function pill(value: string, compact = false) {
   return h('div', { display: 'flex', alignItems: 'center', border: '1px solid rgba(147,197,253,.34)', backgroundColor: 'rgba(15,23,42,.68)', borderRadius: compact ? 18 : 22, padding: compact ? '10px 14px' : '12px 16px', color: '#dbeafe', fontSize: compact ? 18 : 20, fontWeight: 600, lineHeight: 1.2 }, shorten(value, compact ? 38 : 45));
 }
