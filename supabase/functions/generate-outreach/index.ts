@@ -60,7 +60,7 @@ function applySenderIdentity(message: string, sender: SenderIdentity, ensureSign
   const signature = buildSignature(sender);
   if (!ensureSignature || !signature) return cleaned;
 
-  const signOffIndex = cleaned.search(/(?:^|\n)\s*(Best regards|Regards|Sincerely|Thanks|Thank you),?\s*$/im);
+  const signOffIndex = cleaned.search(/(?:^|\n)\s*(?:Best(?: regards| wishes)?|Kind regards|Warm regards|All the best|Regards|Sincerely|Thanks|Thank you|Cheers),?\s*$/im);
   if (signOffIndex >= 0) {
     cleaned = cleaned.slice(0, signOffIndex).trim();
   }
@@ -140,12 +140,6 @@ Deno.serve(async (req: Request) => {
     const { data: audit } = await serviceClient.from("lead_audits").select("website_score, seo_score, conversion_score, main_issues, recommended_offer, personalization_angle").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
     const auditContext = typedAudit ? `Verified audit evidence: website score ${typedAudit.website_score}/100, SEO score ${typedAudit.seo_score}/100, conversion score ${typedAudit.conversion_score}/100. Main issues: ${typedAudit.main_issues.join(", ")}. Recommended offer: ${typedAudit.recommended_offer}. Personalization angle: ${typedAudit.personalization_angle}.` : "No website audit is available. Do not imply that you visited, reviewed, browsed, or analyzed the website.";
-    const senderContext = `Sender information for the signature:
-Name: ${sender.name || "missing"}
-Position: ${sender.position || "missing"}
-Agency name: ${sender.agencyName || "missing"}
-Agency website: ${sender.agencyWebsite || "missing"}
-Phone: ${sender.phone || "missing"}`;
     const prompt = `You write concise, genuinely human cold outreach for a digital agency. Write a ${tone.toLowerCase()} ${channel} in ${language} for this prospect.
 
 Prospect:
@@ -155,8 +149,6 @@ Prospect:
 - Website: ${typedLead.website || "no website"}
 - Google rating: ${typedLead.google_rating ?? "unknown"} (${typedLead.reviews_count} reviews)
 ${auditContext}
-
-${senderContext}
 
 Rules:
 - Style: ${styleInstructions(style)}
@@ -171,17 +163,17 @@ Rules:
 - Open directly with the concrete observation or the context in which the business was found. Vary sentence structure naturally.
 - Use one clear offer and ONE low-friction CTA.
 - Do not promise results.
-- Use the sender information in the signature. Never use placeholders. Omit missing sender fields.
+- Do not include a sign-off, sender name, agency name, website, phone number, or signature. The application adds one after generation.
 - No markdown, bold text, numbered lists, or bullet lists in the message.
 
 ${channel === "email"
-  ? "Email requirements: 70-120 words before the signature, 3-5 short paragraphs, subject line of 3-7 words, and exactly one question."
-  : "DM requirements: 35-65 words before the sign-off, maximum 4 short sentences, empty subject, and exactly one question."}
+  ? "Email requirements: 70-120 words, 3-5 short paragraphs, subject line of 3-7 words, and exactly one question."
+  : "DM requirements: 35-65 words, maximum 4 short sentences, empty subject, and exactly one question."}
 
 Return raw JSON only (no markdown):
 {
   "subject": "<${channel === "dm" ? "empty string" : "short specific subject"}>",
-  "body": "<concise personalized message and sign-off using only available sender information>"
+  "body": "<concise personalized message only; no sign-off or signature>"
 }`;
     async function generate(extraInstruction = "") {
       const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: `${prompt}${extraInstruction}` }], temperature: 0.65, max_tokens: 450, response_format: { type: "json_object" } }) });
