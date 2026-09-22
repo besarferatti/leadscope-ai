@@ -251,30 +251,48 @@ export function CampaignsPage() {
     setCampaignBusy(campaign.id);
     setError('');
     let sent = 0;
-    for (const member of approved.slice(0, campaign.daily_limit)) {
-      setProgress(`Sending ${sent + 1} of ${Math.min(approved.length, campaign.daily_limit)}...`);
-      const response = await fetch('/api/send-outreach-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          lead_id: member.lead_id,
-          outreach_message_id: member.message!.id,
-          campaign_lead_id: member.id,
-          to_email: member.lead.email,
-          subject: member.message!.subject,
-          body: member.message!.body,
-        }),
-      });
-      const result = await response.json() as { error?: string; success?: boolean };
-      if (!response.ok || !result.success) {
-        setError(result.error ?? `Unable to send to ${member.lead.email}.`);
-        break;
+    try {
+      for (const member of approved.slice(0, campaign.daily_limit)) {
+        setProgress(`Sending ${sent + 1} of ${Math.min(approved.length, campaign.daily_limit)}...`);
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+        try {
+          const response = await fetch('/api/send-outreach-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({
+              lead_id: member.lead_id,
+              outreach_message_id: member.message!.id,
+              campaign_lead_id: member.id,
+              to_email: member.lead.email,
+              subject: member.message!.subject,
+              body: member.message!.body,
+            }),
+            signal: controller.signal,
+          });
+          const result = await response.json().catch(() => ({})) as { error?: string; success?: boolean };
+          if (!response.ok || !result.success) {
+            throw new Error(result.error ?? `Unable to send to ${member.lead.email}.`);
+          }
+          sent += 1;
+          await loadCampaignMembers(campaign.id);
+        } catch (sendError) {
+          const message = sendError instanceof DOMException && sendError.name === 'AbortError'
+            ? `Sending to ${member.lead.email} timed out. Check the recipient address or try again.`
+            : sendError instanceof Error ? sendError.message : `Unable to send to ${member.lead.email}.`;
+          setError(message);
+          break;
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
       }
-      sent += 1;
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'The campaign could not be sent. Please try again.');
+    } finally {
+      setProgress('');
+      setCampaignBusy(null);
+      await Promise.all([loadCampaignMembers(campaign.id), loadData()]);
     }
-    setProgress('');
-    setCampaignBusy(null);
-    await Promise.all([loadCampaignMembers(campaign.id), loadData()]);
   }
 
   if (loading) return <LoadingSpinner message="Loading campaigns..." />;

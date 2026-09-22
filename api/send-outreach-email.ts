@@ -192,6 +192,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     requireTLS: isPort587 ? true : undefined,
     auth: { user: settings.smtp_username.trim(), pass: password },
     tls: { servername: settings.smtp_host },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
   });
   const fromEmail = settings.from_email.trim();
   const from = settings.from_name?.trim() ? `"${settings.from_name.trim()}" <${fromEmail}>` : fromEmail;
@@ -229,6 +232,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   } catch (error) {
     const errorMessage = safeErrorMessage(error);
     await supabaseAdmin.from('outreach_email_sends').insert({ ...sendLog, status: 'failed', error_message: errorMessage });
+    if (campaignLead && campaign) {
+      await supabaseAdmin.from('outreach_campaign_leads').update({
+        error_message: errorMessage.slice(0, 500),
+        updated_at: new Date().toISOString(),
+      }).eq('id', campaignLead.id).eq('campaign_id', campaign.id);
+    }
     return errorResponse(res, `Unable to send email: ${errorMessage}`, 502);
   }
 }
