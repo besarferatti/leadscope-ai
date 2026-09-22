@@ -262,7 +262,7 @@ export function CampaignsPage() {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
             body: JSON.stringify({
               lead_id: member.lead_id,
-              outreach_message_id: member.message!.id,
+              outreach_message_id: member.outreach_message_id,
               campaign_lead_id: member.id,
               to_email: member.lead.email,
               subject: member.message!.subject,
