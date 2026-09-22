@@ -131,9 +131,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       .select('id, campaign_id, lead_id, status, outreach_message_id')
       .eq('id', campaignLeadId)
       .eq('lead_id', leadId)
-      .eq('outreach_message_id', outreachMessageId)
       .maybeSingle();
-    if (!member || member.status !== 'approved') return errorResponse(res, 'Campaign message is not approved.', 409);
+    if (!member) return errorResponse(res, 'Campaign lead not found.', 404);
+    if (member.status !== 'approved') return errorResponse(res, 'Campaign message is not approved.', 409);
+    if (!outreachMessageId || member.outreach_message_id !== outreachMessageId) {
+      return errorResponse(res, 'Campaign message does not match the approved message. Refresh the campaign and try again.', 409);
+    }
 
     const { data: ownerCampaign } = await supabaseAdmin
       .from('outreach_campaigns')
