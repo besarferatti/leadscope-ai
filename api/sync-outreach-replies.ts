@@ -66,7 +66,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const lock = await client.getMailboxLock('INBOX', { readOnly: true });
     try {
       const since = new Date(Date.now() - 30 * 24 * 60 * 60_000);
-      const sequence = await client.search({ since });
+      const sequence = (await client.search({ since })) || [];
       if (sequence.length) {
         for await (const message of client.fetch(sequence, { envelope: true })) {
           const envelope = message.envelope;
