@@ -1,5 +1,5 @@
 import { createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 
 type ApiRequest = { method?: string; headers: { authorization?: string | string[]; Authorization?: string | string[] }; body?: unknown };
@@ -41,7 +41,10 @@ function campaignHtml(title: string, body: string, unsubscribeToken: string) {
   return `<!doctype html><html><body style="margin:0;background:#0f172a;font-family:Arial,sans-serif"><main style="max-width:640px;margin:0 auto;padding:32px 20px"><section style="background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px"><p style="margin:0 0 16px;color:#60a5fa;font-weight:bold">LeadScope AI</p><h1 style="margin:0 0 20px;color:#fff;font-size:24px">${escapeHtml(title)}</h1>${content}<p style="margin:24px 0 0"><a href="https://www.leadscope.pro/updates" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">View product updates</a></p><hr style="border:0;border-top:1px solid #334155;margin:28px 0 16px"><p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5">You are receiving this email because you registered for LeadScope AI.<br>You can unsubscribe from product update emails at any time.<br><a href="${unsubscribeUrl}" style="color:#93c5fd">Unsubscribe from product updates</a></p></section></main></body></html>`;
 }
 
-async function listRegisteredRecipients(supabaseAdmin: ReturnType<typeof createClient>, adminUserId: string): Promise<EligibleRecipient[]> {
+// This endpoint intentionally uses an ungenerated schema because these admin-only
+// tables are not present in the frontend Database type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function listRegisteredRecipients(supabaseAdmin: SupabaseClient<any, 'public', any>, adminUserId: string): Promise<EligibleRecipient[]> {
   const users: Array<{ id: string; email?: string }> = [];
   for (let page = 1; ; page += 1) {
     const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
