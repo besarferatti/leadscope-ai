@@ -4,7 +4,7 @@ import {
   Zap, MessageSquare, Loader2, ChevronDown, ChevronUp, Copy, Check,
   BarChart3, Shield, Megaphone, Lightbulb, AlertCircle, Search, FileText, DollarSign, Link2, Monitor, Bookmark, BookmarkCheck,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { getFreshAccessToken, supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Lead, LeadAudit, OutreachEmailSend, OutreachMessage, LeadStatus, WebsitePreview } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -132,11 +132,10 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     if (!lead.website) { setEmailFindMessage('No website available.'); return; }
     setEmailFinding(true); setEmailFindMessage('');
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error('Please sign in again before finding an email.');
+      const accessToken = await getFreshAccessToken();
       const response = await fetch('/api/find-lead-email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ leadId: lead.id }) });
       const data = await response.json() as { status?: string; error?: string; message?: string; email?: string; confidence?: number; sourceUrl?: string; sourceType?: Lead['email_source_type']; emailStatus?: Lead['email_status'] };
+      if (response.status === 401) throw new Error('Your session has expired. Please sign in again.');
       if (!response.ok) throw new Error(data.error || 'Unable to search the website.');
       if (data.status === 'not_found' || data.status === 'no_website' || data.status === 'rejected') { setEmailFindMessage(data.message || 'No verified public business email was found.'); await loadAll(); return; }
       if (data.status !== 'found') throw new Error(data.error || 'Unable to search the website.');
