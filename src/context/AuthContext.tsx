@@ -91,43 +91,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createDefaultProfile = useCallback(
-    async (authUser: User): Promise<UserProfile> => {
-      const now = new Date();
-      const trialEnds = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-      const defaultProfile = {
-        id: authUser.id,
-        email: authUser.email ?? '',
-        full_name: (authUser.user_metadata?.full_name as string | undefined) ?? '',
-        role: 'user' as const,
-        current_plan: 'free_trial' as const,
-        billing_cycle: 'monthly' as const,
-        subscription_status: 'trialing',
-        trial_started_at: now.toISOString(),
-        trial_ends_at: trialEnds.toISOString(),
-        leads_used_this_month: 0,
-        audits_used_this_month: 0,
-        messages_used_this_month: 0,
-        usage_cycle_started_at: now.toISOString(),
-        is_active: true,
-        must_change_password: false,
-        created_at: now.toISOString(),
-        updated_at: now.toISOString(),
-      };
-
+    async (): Promise<UserProfile> => {
       const { data, error } = await withTimeout(
-        supabase
-          .from('user_profiles')
-          .upsert(defaultProfile, { onConflict: 'id', ignoreDuplicates: true })
-          .select('*')
-          .maybeSingle(),
+        supabase.rpc('ensure_user_profile').single(),
         7000,
         'Profile creation timed out.'
       );
-
       if (error) throw error;
-
-      return normalizeProfile((data ?? defaultProfile) as UserProfile);
+      if (!data) throw new Error('Unable to create your profile.');
+      return normalizeProfile(data as UserProfile);
     },
     [normalizeProfile]
   );
@@ -152,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const loadedProfile = data
           ? normalizeProfile(data as UserProfile)
-          : await createDefaultProfile(authUser);
+          : await createDefaultProfile();
 
         const updated = await resetUsageIfNeeded(loadedProfile);
         setProfile(updated);

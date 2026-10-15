@@ -129,9 +129,10 @@ Deno.serve(async (req) => {
       JSON.stringify({ plan: resolvedPlan, status: subscription.status, synced: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unexpected server error";
     console.error('sync-subscription error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
