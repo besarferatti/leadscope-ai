@@ -78,7 +78,7 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
         p_referred_full_name: signupFullName,
       });
       if (data) trackEvent('affiliate_referral_signup', { referral_code: code });
-    } catch (_) {
+    } catch {
       // Referral tracking should never block signup success.
     }
   }
