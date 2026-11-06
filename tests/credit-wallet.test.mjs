@@ -1,15 +1,24 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 
-const db = new PGlite();
+const db = new PGlite({ extensions: { pgcrypto } });
 const owner = randomUUID();
 const other = randomUUID();
 const admin = randomUUID();
 const epoch = Math.floor(Date.now() / 1000);
-const migrate = async (name) => db.exec(await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'));
+const migrations = new URL('../supabase/migrations/', import.meta.url);
+const walletMigration = '20261106000000_credit_wallet.sql';
+async function migrate(name) {
+  try {
+    await db.exec(await readFile(new URL(name, migrations), 'utf8'));
+  } catch (error) {
+    throw new Error('Could not apply ' + name + ': ' + error.message, { cause: error });
+  }
+}
 
 async function as(role, id, query, params) {
   await db.exec('BEGIN');
@@ -41,6 +50,11 @@ before(async () => {
     CREATE ROLE authenticated NOLOGIN;
     CREATE ROLE service_role NOLOGIN BYPASSRLS;
     CREATE SCHEMA auth;
+    CREATE SCHEMA storage;
+    CREATE TABLE storage.buckets (
+      id text PRIMARY KEY, name text NOT NULL, public boolean, file_size_limit bigint, allowed_mime_types text[]
+    );
+    CREATE EXTENSION pgcrypto;
     CREATE TABLE auth.users (
       id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb DEFAULT '{}', created_at timestamptz DEFAULT now()
     );
@@ -49,11 +63,9 @@ before(async () => {
     $$;
     GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
   `);
-  await migrate('20260626041515_create_user_profiles.sql');
-  await migrate('20260626120459_fix_user_profiles_rls_recursion.sql');
-  await migrate('20260626122319_fix_security_advisor_warnings.sql');
-  await migrate('20260626051128_calm_dust.sql');
-  await migrate('20261016000000_harden_profile_authorization.sql');
+  for (const name of (await readdir(migrations)).filter(name => name.endsWith('.sql') && name < walletMigration).sort()) {
+    await migrate(name);
+  }
   for (const user of [owner, other, admin]) {
     await db.query('INSERT INTO auth.users (id, email) VALUES ($1, $2)', [user, user + '@example.invalid']);
   }
@@ -63,7 +75,7 @@ before(async () => {
     (checkout_session_id, payment_intent_id, customer_id, amount_subtotal, amount_total, currency, payment_status)
     VALUES ('old_session', 'old_intent', 'cus_owner', 900, 900, 'usd', 'paid'),
            ('old_session', 'old_intent', 'cus_owner', 900, 900, 'usd', 'paid')`);
-  await migrate('20261106000000_credit_wallet.sql');
+  await migrate(walletMigration);
 });
 after(async () => db.close());
 
