@@ -8,24 +8,27 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.api.json",
+    "test": "node --test tests/*.test.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.6",
     "@supabase/supabase-js": "2.57.4",
     "imapflow": "^1.7.8",
     "lucide-react": "^0.344.0",
-    "nodemailer": "^7.0.6",
+    "nodemailer": "10.3.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "satori": "^0.18.3",
-    "sharp": "^0.34.3"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
     "@eslint/js": "^9.9.1",
+    "@types/node": "24.19.2",
+    "@types/nodemailer": "8.0.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "6.2.1",
     "autoprefixer": "^10.4.18",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
@@ -35,6 +38,6 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "8.3.6"
   }
 }

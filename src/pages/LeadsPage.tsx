@@ -14,7 +14,7 @@ import { ScoreBadge } from '../components/ui/ScoreBadge';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { exportLeadsCSV, getWebsiteStatus, LEAD_STATUSES, INDUSTRIES, type WebsiteStatus } from '../lib/utils';
 import {
-  canGenerateLead, canExportCSV, getPlanLimits, isAdmin, incrementUsage,
+  canExportCSV,
 } from '../lib/plans';
 
 interface Props {
@@ -182,15 +182,6 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     e.preventDefault();
     if (!form.business_name.trim()) { setError('Business name is required.'); return; }
 
-    // Limit check (skip for admin)
-    if (!isAdmin(profile)) {
-      const check = canGenerateLead(profile);
-      if (!check.allowed) {
-        setUpgradeMsg(check.message ?? '');
-        return;
-      }
-    }
-
     setSaving(true);
     setError('');
     const { error: insertError } = await supabase.from('leads').insert({
@@ -211,7 +202,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     if (insertError) {
       setError(insertError.message);
     } else {
-      if (user && !isAdmin(profile)) await incrementUsage(user.id, 'leads', 1);
+
       await refreshProfile();
       setForm({ ...defaultForm, lead_search_id: initialSearchId ?? '' });
       setShowForm(false);
@@ -242,8 +233,8 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!csvAllowed && !isAdmin(profile)) {
-      setUpgradeMsg('CSV export is available on Starter and higher plans.');
+    if (!csvAllowed) {
+      setUpgradeMsg('An active account is required to use CSV tools.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -282,7 +273,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
       const { error: insertError } = await supabase.from('leads').insert(inserts);
       if (insertError) setError(insertError.message);
       else {
-        if (user && !isAdmin(profile)) await incrementUsage(user.id, 'leads', inserts.length);
+
         await refreshProfile();
         await loadData();
       }
@@ -293,7 +284,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
   function handleExport() {
     if (!csvAllowed) {
-      setUpgradeMsg('CSV export is available on Starter and higher plans.');
+      setUpgradeMsg('An active account is required to use CSV tools.');
       return;
     }
     const data = filteredLeads.map(l => ({
@@ -381,26 +372,10 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
     const selectedIds = [...selectedLeadIds];
     const existingSkippedIds = reanalyzeExisting ? [] : selectedIds.filter(id => auditedLeadIds.has(id));
-    let queuedIds = selectedIds.filter(id => reanalyzeExisting || !auditedLeadIds.has(id));
-    let limitSkipped = 0;
-
-    if (!isAdmin(profile)) {
-      const limits = getPlanLimits(profile);
-      const remaining = limits.auditsLimit === -1
-        ? queuedIds.length
-        : Math.max(0, limits.auditsLimit - (profile?.audits_used_this_month ?? 0));
-      if (remaining === 0 && queuedIds.length) {
-        setUpgradeMsg("You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites.");
-        return;
-      }
-      if (queuedIds.length > remaining) {
-        limitSkipped = queuedIds.length - remaining;
-        queuedIds = queuedIds.slice(0, remaining);
-      }
-    }
+    const queuedIds = selectedIds.filter(id => reanalyzeExisting || !auditedLeadIds.has(id));
 
     const total = queuedIds.length;
-    const skipped = existingSkippedIds.length + limitSkipped;
+    const skipped = existingSkippedIds.length;
     setBulkAnalyzing(true);
     setError('');
     setBulkMessage('');
@@ -429,7 +404,7 @@ export function LeadsPage({ onNavigate, initialSearchId }: Props) {
 
     await Promise.all(Array.from({ length: Math.min(3, total) }, () => worker()));
     setAuditedLeadIds(current => new Set([...current, ...newlyAudited]));
-    setBulkMessage(`Bulk analysis finished: ${completed} completed, ${skipped} skipped${limitSkipped ? ` (${limitSkipped} due to plan limit)` : ''}, ${failed} failed.`);
+    setBulkMessage(`Bulk analysis finished: ${completed} completed, ${skipped} skipped, ${failed} failed.`);
     await refreshProfile();
     await loadData();
     setBulkAnalyzing(false);

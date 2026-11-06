@@ -21,7 +21,7 @@ export function getStoredReferralCode() {
     }
 
     return code;
-  } catch (_) {
+  } catch {
     return '';
   }
 }
@@ -30,7 +30,7 @@ export function clearStoredReferralCode() {
   try {
     localStorage.removeItem(REFERRAL_CODE_KEY);
     localStorage.removeItem(REFERRAL_SEEN_AT_KEY);
-  } catch (_) {
+  } catch {
     // Ignore storage failures.
   }
 }
@@ -47,7 +47,7 @@ export async function captureReferralFromUrl() {
     localStorage.setItem(REFERRAL_SEEN_AT_KEY, String(Date.now()));
 
     await supabase.rpc('track_affiliate_click', { p_referral_code: code });
-  } catch (_) {
+  } catch {
     // Referral tracking should never break the app.
   }
 }

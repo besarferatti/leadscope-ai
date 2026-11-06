@@ -14,6 +14,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { UpgradeModal } from '../components/ui/UpgradeModal';
 import { LEAD_STATUSES, LANGUAGES, TONES, formatDate, getScoreColor, getScoreBg } from '../lib/utils';
 import { canRunAudit, canGenerateMessage, isAdmin } from '../lib/plans';
+import { functionErrorMessage } from '../lib/functionErrors';
 import { trackEvent } from '../lib/analytics';
 
 interface Props {
@@ -166,7 +167,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         body: { lead_id: leadId },
       });
 
-      if (functionError) throw new Error(functionError.message);
+      if (functionError) throw new Error(await functionErrorMessage(functionError));
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
       trackEvent('website_audit_generated', { lead_id: leadId });
@@ -204,7 +205,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         },
       });
 
-      if (functionError) throw new Error(functionError.message);
+      if (functionError) throw new Error(await functionErrorMessage(functionError));
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
       trackEvent('outreach_message_generated', { lead_id: leadId, channel: msgChannel, language: msgLanguage, tone: msgTone, style: msgStyle });
@@ -246,7 +247,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
         body: { lead_id: leadId },
       });
 
-      if (functionError) throw new Error(functionError.message);
+      if (functionError) throw new Error(await functionErrorMessage(functionError));
       if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
 
       const preview = (data as { preview?: { preview_token?: string; created_at?: string } } | null)?.preview;

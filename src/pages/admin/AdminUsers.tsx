@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, UserX, UserCheck, Trash2, Key, ChevronDown } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { RefreshCw, UserX, UserCheck, Trash2, Key, ChevronDown, Coins } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
@@ -18,6 +18,15 @@ export function AdminUsers() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editModal, setEditModal] = useState<EditModal | null>(null);
+  const [grant, setGrant] = useState<{
+    user: AdminUserRow;
+    operation: string;
+    amount: string;
+    reason: string;
+    attempted: boolean;
+  } | null>(null);
+  const [grantError, setGrantError] = useState('');
+  const [granting, setGranting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -68,6 +77,41 @@ export function AdminUsers() {
       usage_cycle_started_at: new Date().toISOString(),
     } as Partial<AdminUserRow>);
     showSuccess('Usage reset.');
+  }
+
+  function openGrant(user: AdminUserRow) {
+    setGrantError('');
+    setGrant({ user, operation: crypto.randomUUID(), amount: '', reason: '', attempted: false });
+  }
+
+  async function submitGrant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!grant || granting) return;
+    const amount = Number(grant.amount);
+    const reason = grant.reason.trim();
+    if (!Number.isInteger(amount) || amount < 1 || amount > 1_000_000 || !reason || reason.length > 500) {
+      setGrantError('Enter 1 to 1,000,000 credits and a reason of up to 500 characters.');
+      return;
+    }
+    setGranting(true);
+    setGrantError('');
+    setGrant({ ...grant, attempted: true });
+    try {
+      const { data, error } = await supabase.rpc('grant_admin_credits', {
+        p_user: grant.user.id, p_amount: amount, p_reason: reason, p_operation: grant.operation,
+      });
+      if (error || typeof data !== 'boolean') {
+        setGrantError(error?.message ?? 'Could not verify the grant. Retry to check the same request.');
+        return;
+      }
+      showSuccess(data ? amount.toLocaleString() + ' credits added to ' + grant.user.email + '.'
+        : 'This grant was already recorded for ' + grant.user.email + '.');
+      setGrant(null);
+    } catch {
+      setGrantError('Could not verify the grant. Retry to check the same request.');
+    } finally {
+      setGranting(false);
+    }
   }
 
   if (loading) return <LoadingSpinner message="Loading users..." />;
@@ -131,6 +175,9 @@ export function AdminUsers() {
                   <td className="px-4 py-3 hidden sm:table-cell text-slate-500 text-xs">{formatDate(u.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <button type="button" onClick={() => openGrant(u)} className="btn-secondary px-2 py-1 text-xs whitespace-nowrap">
+                        <Coins className="w-3.5 h-3.5" /> Add credits
+                      </button>
                       <button
                         onClick={() => setEditModal({ user: u })}
                         className="text-slate-500 hover:text-blue-400 transition-colors p-1"
@@ -177,6 +224,38 @@ export function AdminUsers() {
           </table>
         </div>
       </div>
+
+      {grant && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <form role="dialog" aria-modal="true" aria-labelledby="credit-grant-title" onSubmit={submitGrant}
+            className="card p-6 w-full max-w-md space-y-4">
+            <div>
+              <h3 id="credit-grant-title" className="text-white font-semibold">Add credits</h3>
+              <p className="text-slate-300 text-sm mt-1 break-all">{grant.user.email}</p>
+              <p className="text-slate-400 text-sm mt-1">Manual credits never expire.</p>
+            </div>
+            {grantError && <p role="alert" className="text-red-300 text-sm">{grantError}</p>}
+            <label className="block text-slate-300 text-sm">
+              Credits
+              <input type="number" min={1} max={1000000} step={1} required readOnly={grant.attempted}
+                className="input-field mt-1 w-full" value={grant.amount}
+                onChange={e => setGrant({ ...grant, amount: e.target.value })} />
+            </label>
+            <label className="block text-slate-300 text-sm">
+              Internal reason
+              <textarea maxLength={500} required readOnly={grant.attempted}
+                className="input-field mt-1 w-full" value={grant.reason}
+                onChange={e => setGrant({ ...grant, reason: e.target.value })} />
+            </label>
+            <div className="flex gap-3 justify-end">
+              <button type="button" disabled={granting} onClick={() => setGrant(null)} className="btn-secondary">Close</button>
+              <button type="submit" disabled={granting} className="btn-primary">
+                {granting ? 'Adding…' : grant.attempted ? 'Retry grant' : 'Add credits'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editModal && (

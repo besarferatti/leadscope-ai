@@ -1,3 +1,4 @@
+import { chargeCredits } from '../_shared/credits.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -7,8 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
-type UserProfile = { id: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; audits_used_this_month: number; is_active: boolean };
+type UserProfile = { id: string; role: "admin" | "user" };
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
 type SeoContentPack = {
   suggested_keywords: { primary: string[]; local: string[]; service: string[]; long_tail: string[] };
@@ -51,7 +51,6 @@ type WebsiteSignals = {
   };
 };
 
-const auditLimits: Record<PlanId, number> = { free_trial: 25, starter: 100, pro: 500, agency: 2000, enterprise: -1, admin_unlimited: -1 };
 
 function jsonResponse(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
 function errorResponse(message: string, status = 400) { return jsonResponse({ error: message }, status); }
@@ -152,15 +151,6 @@ async function fetchWebsiteSignals(rawUrl: string): Promise<WebsiteSignals> {
     clearTimeout(timeoutId);
   }
 }
-function enforceAuditLimit(profile: UserProfile): string | null {
-  if (isAdmin(profile)) return null;
-  if (!profile.is_active) return "Your account is inactive. Please contact support.";
-  if (profile.current_plan === "free_trial" && new Date(profile.trial_ends_at) < new Date()) return "Your free trial has ended. Upgrade your plan to continue using LeadScope AI.";
-  const limit = auditLimits[profile.current_plan] ?? auditLimits.free_trial;
-  if (limit !== -1 && profile.audits_used_this_month >= limit) return profile.current_plan === "free_trial" ? "You’ve reached your free trial limit of 25 audits. Upgrade to continue." : "You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites.";
-  return null;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   try {
@@ -178,7 +168,7 @@ Deno.serve(async (req: Request) => {
     const { lead_id } = await req.json() as { lead_id?: string };
     if (!lead_id) return errorResponse("lead_id is required");
 
-    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role, current_plan, trial_ends_at, audits_used_this_month, is_active").eq("id", user.id).maybeSingle();
+    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role").eq("id", user.id).maybeSingle();
     if (profileError || !profile) return errorResponse("User profile not found", 404);
     const typedProfile = profile as UserProfile;
 
@@ -187,9 +177,9 @@ Deno.serve(async (req: Request) => {
     const typedLead = lead as Lead;
     if (!isAdmin(typedProfile) && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
-    const limitError = enforceAuditLimit(typedProfile);
-    if (limitError) return errorResponse(limitError, 403);
 
+    const creditError = await chargeCredits(serviceClient, user.id, "website_analysis");
+    if (creditError) return errorResponse(creditError.message, creditError.status);
     const websiteSignals = typedLead.website ? await fetchWebsiteSignals(typedLead.website) : emptyWebsiteSignals("", "not_provided", "No website URL was provided.");
     const websiteSignalNote = websiteSignals.fetchStatus === "success"
       ? "Real website HTML was fetched successfully. Use these extracted signals as evidence for technical SEO and conversion observations."
@@ -270,10 +260,6 @@ Return a JSON object (no markdown, just raw JSON) with this exact structure:
     if (auditWrite.error) return errorResponse(`Failed to save audit: ${auditWrite.error.message}`, 500);
     const { error: leadUpdateError } = await serviceClient.from("leads").update({ lead_score: parsed.lead_score, status: "Audited" }).eq("id", lead_id);
     if (leadUpdateError) return errorResponse(`Failed to update lead: ${leadUpdateError.message}`, 500);
-    if (!isAdmin(typedProfile)) {
-      const { error: usageError } = await serviceClient.from("user_profiles").update({ audits_used_this_month: typedProfile.audits_used_this_month + 1, updated_at: new Date().toISOString() }).eq("id", user.id);
-      if (usageError) return errorResponse(`Failed to update usage: ${usageError.message}`, 500);
-    }
     return jsonResponse({ audit: { ...auditWrite.data, seo_content_pack: parsed.seo_content_pack } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to analyze lead.";

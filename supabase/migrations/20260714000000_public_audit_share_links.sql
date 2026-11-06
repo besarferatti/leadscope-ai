@@ -11,6 +11,10 @@ add column if not exists share_token text unique;
 alter table public.lead_audits
 add column if not exists shared_at timestamptz;
 
+-- Older environments added this column manually for AI audits.
+alter table public.lead_audits
+add column if not exists seo_content_pack jsonb;
+
 create index if not exists idx_lead_audits_share_token
 on public.lead_audits (share_token)
 where share_token is not null;

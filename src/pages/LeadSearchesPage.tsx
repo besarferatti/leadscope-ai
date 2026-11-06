@@ -17,7 +17,6 @@ import {
   LANGUAGES,
   WEBSITE_STATUS_FILTER_OPTIONS,
 } from '../lib/utils';
-import { isAdmin, incrementUsage } from '../lib/plans';
 import { trackEvent } from '../lib/analytics';
 
 interface Props {
@@ -49,7 +48,7 @@ interface FindLeadsState {
 }
 
 export function LeadSearchesPage({ onNavigate }: Props) {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const [searches, setSearches] = useState<LeadSearch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -91,10 +90,6 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       return;
     }
 
-    if (!isAdmin(profile) && profile?.current_plan === 'free_trial' && searches.length >= 30) {
-      setUpgradeMsg('You’ve reached your free trial limit of 30 lead searches. Upgrade to continue.');
-      return;
-    }
 
     setSaving(true);
     setError('');
@@ -160,6 +155,7 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       };
 
       if (!res.ok || json.error) {
+        if (res.status === 402) setUpgradeMsg(json.error ?? 'Insufficient credits.');
         const errMsg = json.error ?? `Request failed (${res.status})`;
         setFindState(prev => ({ ...prev, [search.id]: { loading: false, error: errMsg, result: null } }));
         await supabase.from('lead_searches').update({ status: 'pending' }).eq('id', search.id);
@@ -176,11 +172,6 @@ export function LeadSearchesPage({ onNavigate }: Props) {
       const scanned = json.scanned ?? 0;
       const matched_website_status = json.matched_website_status ?? 0;
 
-      // Increment usage
-      if (inserted > 0 && user && !isAdmin(profile)) {
-        await incrementUsage(user.id, 'leads', inserted);
-        await refreshProfile();
-      }
 
       trackEvent('lead_search_completed', {
         search_id: search.id,

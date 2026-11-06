@@ -1,80 +1,58 @@
-import { Check, X } from 'lucide-react';
-import { PLANS, PLAN_DISPLAY_ORDER } from '../../lib/plans';
+import { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabase';
+
+type Price = { action: string; label: string; credits: number };
 
 export function AdminPlans() {
+  const [prices, setPrices] = useState<Price[]>([]);
+  const [editing, setEditing] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string>();
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    void supabase.from('credit_prices').select('action, label, credits').order('label').then(({ data, error }) => {
+      if (error) setMessage('Unable to load credit prices.');
+      else setPrices(data);
+    });
+  }, []);
+
+  async function save(price: Price) {
+    const raw = editing[price.action] ?? '';
+    const credits = Number(raw);
+    if (raw === '' || !Number.isInteger(credits) || credits < 0 || credits > 1000000) {
+      setMessage('Enter a whole number between 0 and 1,000,000.');
+      return;
+    }
+    setSaving(price.action);
+    const { error } = await supabase.rpc('set_credit_price', { p_action: price.action, p_credits: credits });
+    if (error) setMessage('Unable to save the credit price.');
+    else {
+      setPrices(current => current.map(item => item.action === price.action ? { ...item, credits } : item));
+      setMessage(price.label + ' price saved.');
+    }
+    setSaving(undefined);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-white">Plans</h1>
-        <p className="text-slate-400 text-sm mt-1">Current plan configuration. Plan editing can be connected to database later.</p>
+        <h1 className="text-2xl font-bold text-white">Plans and credit prices</h1>
+        <p className="mt-1 text-sm text-slate-400">PRO costs €69 per month and includes 7,400 credits. Price changes apply to future actions.</p>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        {PLAN_DISPLAY_ORDER.map(planId => {
-          const plan = PLANS[planId];
-          return (
-            <div key={planId} className={`card p-5 ${plan.popular ? 'border-blue-500/40' : ''}`}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold">{plan.name}</h3>
-                {plan.popular && <span className="badge bg-blue-500/20 text-blue-400 text-xs">Popular</span>}
-              </div>
-
-              <div className="mb-4">
-                <p className="text-slate-300 text-sm">
-                  {plan.monthlyPrice === null ? 'Custom pricing' : plan.monthlyPrice === 0 ? 'Free' : `€${plan.monthlyPrice}/mo · €${plan.yearlyPrice}/yr`}
-                </p>
-              </div>
-
-              <div className="space-y-1.5 text-sm">
-                {[
-                  ['Leads/mo', plan.leadsLimit === -1 ? 'Unlimited' : plan.leadsLimit.toLocaleString()],
-                  ['Audits/mo', plan.auditsLimit === -1 ? 'Unlimited' : plan.auditsLimit.toLocaleString()],
-                  ['Messages/mo', plan.messagesLimit === -1 ? 'Unlimited' : plan.messagesLimit.toLocaleString()],
-                  ['Website previews/mo', plan.websitePreviewsLimit === -1 ? 'Unlimited' : plan.websitePreviewsLimit.toLocaleString()],
-                  ['Users', plan.usersLimit === -1 ? 'Unlimited' : plan.usersLimit],
-                ].map(([label, val]) => (
-                  <div key={label as string} className="flex justify-between">
-                    <span className="text-slate-500">{label}</span>
-                    <span className="text-slate-300 font-medium">{val}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-2 gap-1.5 text-xs">
-                {[
-                  ['CSV Export', plan.csvExport],
-                  ['Bulk Actions', plan.bulkActions],
-                  ['Google Places', plan.googlePlacesSearch],
-                  ['Saved Templates', plan.savedTemplates],
-                  ['Multi Workspaces', plan.multipleWorkspaces],
-                  ['Custom Scoring', plan.customLeadScoring],
-                  ['Priority Support', plan.prioritySupport],
-                  ['API Access', plan.apiAccess],
-                  ['White Label', plan.whiteLabel],
-                  ['Public Share Links', true],
-                  ['Multilingual Links', true],
-                  ['Website Previews', true],
-                  ['Saved Leads', true],
-                  ['Website Status Targeting', true],
-                ].map(([label, enabled]) => (
-                  <div key={label as string} className="flex items-center gap-1.5">
-                    {enabled
-                      ? <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      : <X className="w-3.5 h-3.5 text-slate-700 flex-shrink-0" />}
-                    <span className={enabled ? 'text-slate-300' : 'text-slate-600'}>{label}</span>
-                  </div>
-                ))}
-              </div>
+      {message && <p role="status" className="text-sm text-slate-300">{message}</p>}
+      <div className="card divide-y divide-slate-800 px-5">
+        {prices.map(price => (
+          <form key={price.action} className="flex flex-wrap items-center justify-between gap-3 py-3"
+            onSubmit={event => { event.preventDefault(); void save(price); }}>
+            <label htmlFor={price.action} className="text-sm text-slate-300">{price.label}</label>
+            <div className="flex items-center gap-2">
+              <input id={price.action} type="number" min={0} max={1000000} step={1}
+                className="input-field w-32" value={editing[price.action] ?? price.credits}
+                onChange={event => setEditing(current => ({ ...current, [price.action]: event.target.value }))} />
+              <button type="submit" className="btn-secondary text-sm" disabled={saving !== undefined || editing[price.action] === undefined}>Save</button>
             </div>
-          );
-        })}
-      </div>
-
-      <div className="card p-4">
-        <p className="text-slate-500 text-sm">
-          Plan limits are currently hardcoded in <code className="text-slate-400 bg-slate-800 px-1 rounded">src/lib/plans.ts</code>.
-          Dynamic plan editing via the database can be connected later by migrating plan configs to a <code className="text-slate-400 bg-slate-800 px-1 rounded">plans</code> table.
-        </p>
+          </form>
+        ))}
       </div>
     </div>
   );

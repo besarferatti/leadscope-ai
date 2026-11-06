@@ -1,3 +1,4 @@
+import { chargeCredits } from '../supabase/functions/_shared/credits.ts';
 import { lookup, resolveMx } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
@@ -181,6 +182,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!lead.website?.trim()) return respond(res, 200, { status: 'no_website', message: 'No website available.' });
   try {
     const start = await validateUrl(lead.website); const domain = start.hostname.replace(/^www\./, '');
+    const creditError = await chargeCredits(admin, ownerId, 'email_discovery');
+    if (creditError) return respond(res, creditError.status, { error: creditError.message });
     const queue = [start]; const visited = new Set<string>(); const candidates = new Map<string, Candidate>();
     while (queue.length && visited.size <= MAX_INTERNAL_PAGES) {
       const next = queue.shift()!; if (visited.has(next.toString())) continue; visited.add(next.toString());

@@ -61,17 +61,25 @@ Deno.serve(async (req) => {
       : {};
     const returnUrl = (body?.return_url as string) || Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '') || 'https://app.leadscope.pro/settings';
 
+    const configurationId = Deno.env.get('STRIPE_MANAGE_ONLY_PORTAL_CONFIG');
+    if (!configurationId) throw new Error('A manage-only Stripe portal configuration is required.');
+    const configuration = await stripe.billingPortal.configurations.retrieve(configurationId);
+    if (!configuration.active || configuration.features.subscription_update.enabled) {
+      throw new Error('The billing portal must disable subscription changes.');
+    }
     const session = await stripe.billingPortal.sessions.create({
       customer: customer.customer_id,
       return_url: returnUrl,
+      configuration: configurationId,
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (err: any) {
-    console.error('Portal error:', err.message);
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unexpected server error";
+    console.error('Portal error:', message);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

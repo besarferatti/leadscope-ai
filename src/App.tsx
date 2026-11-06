@@ -85,16 +85,16 @@ function PlanPickerScreen({ onDismiss }: { onDismiss: () => void }) {
           onClick={onDismiss}
           className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 text-sm transition-colors"
         >
-          Continue with free trial
+          Continue to free CRM
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 
       <div className="flex-1 overflow-auto py-10 px-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Choose your plan</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Subscribe to LeadScope PRO</h1>
           <p className="text-slate-400 text-sm">
-            You're on the Free Trial. Upgrade now to unlock more leads, AI audits, and outreach messages.
+            Use the CRM for free, or get monthly credits for lead search, AI audits, and outreach.
           </p>
           {checkoutError && (
             <div className="flex items-center justify-center gap-2 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 max-w-lg mx-auto">
@@ -188,7 +188,8 @@ function AppInner() {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get('checkout');
     const portal = params.get('portal');
-    if (checkout === 'success' || checkout === 'cancel' || portal === 'return') {
+    const wallet = params.get('wallet');
+    if (checkout === 'success' || checkout === 'cancel' || portal === 'return' || wallet === 'success' || wallet === 'cancel') {
       window.history.replaceState({}, '', window.location.pathname);
       sessionStorage.setItem('plan_picker_dismissed', '1');
       setPlanPickerDismissed(true);
@@ -198,7 +199,7 @@ function AppInner() {
       } else if (checkout === 'cancel') {
         setCheckoutBanner('cancel');
       }
-      // portal=return: silently refresh profile in the background (no spinner needed)
+      if (wallet || portal === 'return') navigate('settings', { tab: 'billing' });
     }
   }, []);
 
@@ -421,7 +422,7 @@ function AppInner() {
     return <><SEO noindex canonicalPath="/admin" /><DashboardPage onNavigate={navigate} /></>;
   }
 
-  // Show plan picker for free trial users (once per session, not for admins)
+  // Show the PRO offer once per session for free CRM accounts.
   if (
     profile?.current_plan === 'free_trial' &&
     profile?.role !== 'admin' &&
@@ -464,7 +465,7 @@ function AppInner() {
           <div className="flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
             <div>
-              <p className="text-emerald-300 font-medium text-sm">Payment successful! Your plan has been upgraded.</p>
+              <p className="text-emerald-300 font-medium text-sm">Payment received. You can check your subscription and credits in Billing.</p>
               <p className="text-emerald-400/70 text-xs mt-0.5">It may take a moment to reflect.</p>
             </div>
           </div>

@@ -1,5 +1,3 @@
-import { supabase } from './supabase';
-
 export type PlanId = 'free_trial' | 'starter' | 'pro' | 'agency' | 'enterprise' | 'admin_unlimited';
 export type BillingCycle = 'monthly' | 'yearly';
 
@@ -48,7 +46,7 @@ export interface UserProfile {
 export const PLANS: Record<PlanId, PlanConfig> = {
   free_trial: {
     id: 'free_trial',
-    name: 'Free Trial',
+    name: 'Free CRM',
     monthlyPrice: 0,
     yearlyPrice: 0,
     leadsLimit: 100,
@@ -169,39 +167,6 @@ export const PLANS: Record<PlanId, PlanConfig> = {
   },
 };
 
-export const PLAN_DISPLAY_ORDER: PlanId[] = ['starter', 'pro', 'agency'];
-
-// Map plan IDs + billing cycles to Stripe price IDs.
-// Replace these with your actual Stripe price IDs from the Stripe dashboard.
-export const STRIPE_PRICE_IDS: Partial<Record<PlanId, { monthly: string; yearly: string }>> = {
-  starter: {
-    monthly: import.meta.env.VITE_STRIPE_STARTER_MONTHLY ?? '',
-    yearly: import.meta.env.VITE_STRIPE_STARTER_YEARLY ?? '',
-  },
-  pro: {
-    monthly: import.meta.env.VITE_STRIPE_PRO_MONTHLY ?? '',
-    yearly: import.meta.env.VITE_STRIPE_PRO_YEARLY ?? '',
-  },
-  agency: {
-    monthly: import.meta.env.VITE_STRIPE_AGENCY_MONTHLY ?? '',
-    yearly: import.meta.env.VITE_STRIPE_AGENCY_YEARLY ?? '',
-  },
-};
-
-export function getStripePriceId(planId: PlanId, billingCycle: BillingCycle): string | null {
-  return STRIPE_PRICE_IDS[planId]?.[billingCycle] ?? null;
-}
-
-// Map Stripe price IDs back to plan IDs (used by webhook sync)
-export function getPlanFromPriceId(priceId: string): PlanId | null {
-  for (const [planId, cycles] of Object.entries(STRIPE_PRICE_IDS)) {
-    if (cycles && (cycles.monthly === priceId || cycles.yearly === priceId)) {
-      return planId as PlanId;
-    }
-  }
-  return null;
-}
-
 export const CHANGEABLE_PLANS: { id: PlanId; label: string }[] = [
   { id: 'free_trial', label: 'Free Trial' },
   { id: 'starter', label: 'Starter' },
@@ -233,59 +198,15 @@ export function getTrialDaysLeft(profile: UserProfile | null): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-function baseCheck(profile: UserProfile | null): { allowed: boolean; message?: string } | null {
-  if (!profile) return { allowed: false, message: 'Not authenticated.' };
-  if (!profile.is_active) return { allowed: false, message: 'Your account is inactive. Please contact support.' };
-  if (isAdmin(profile)) return { allowed: true };
-  if (isTrialExpired(profile)) return { allowed: false, message: 'Your free trial has ended. Upgrade your plan to continue using LeadScope AI.' };
-  return null;
-}
-
-export function canGenerateLead(profile: UserProfile | null): { allowed: boolean; message?: string } {
-  const base = baseCheck(profile);
-  if (base) return base;
-  const limits = getPlanLimits(profile);
-  if (limits.leadsLimit !== -1 && profile!.leads_used_this_month >= limits.leadsLimit) {
-    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 100 saved leads. Upgrade to continue." };
-    return { allowed: false, message: "You've reached your monthly lead limit. Upgrade your plan to continue generating more leads." };
-  }
-  return { allowed: true };
-}
-
 export function canRunAudit(profile: UserProfile | null): { allowed: boolean; message?: string } {
-  const base = baseCheck(profile);
-  if (base) return base;
-  const limits = getPlanLimits(profile);
-  if (limits.auditsLimit !== -1 && profile!.audits_used_this_month >= limits.auditsLimit) {
-    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 25 audits. Upgrade to continue." };
-    return { allowed: false, message: "You've reached your monthly AI audit limit. Upgrade your plan to analyze more websites." };
-  }
+  if (!profile?.is_active) return { allowed: false, message: 'An active account is required.' };
   return { allowed: true };
 }
 
-export function canGenerateMessage(profile: UserProfile | null): { allowed: boolean; message?: string } {
-  const base = baseCheck(profile);
-  if (base) return base;
-  const limits = getPlanLimits(profile);
-  if (limits.messagesLimit !== -1 && profile!.messages_used_this_month >= limits.messagesLimit) {
-    if (profile!.current_plan === 'free_trial') return { allowed: false, message: "You’ve reached your free trial limit of 25 outreach messages. Upgrade to continue." };
-    return { allowed: false, message: "You've reached your monthly outreach message limit. Upgrade your plan to generate more personalized messages." };
-  }
-  return { allowed: true };
-}
+export const canGenerateMessage = canRunAudit;
 
 export function canExportCSV(profile: UserProfile | null): boolean {
-  if (!profile) return false;
-  if (isAdmin(profile)) return true;
-  if (isTrialExpired(profile)) return false;
-  return getPlanLimits(profile).csvExport;
-}
-
-export function canUseBulkActions(profile: UserProfile | null): boolean {
-  if (!profile) return false;
-  if (isAdmin(profile)) return true;
-  if (isTrialExpired(profile)) return false;
-  return getPlanLimits(profile).bulkActions;
+  return Boolean(profile?.is_active);
 }
 
 export function getPlanBadgeColor(plan: PlanId | string): string {
@@ -309,49 +230,4 @@ export function getSubscriptionStatusColor(status: string): string {
     case 'past_due': return 'bg-amber-500/20 text-amber-400';
     default: return 'bg-slate-700 text-slate-300';
   }
-}
-
-// Increment usage counters; pass the userId since we don't want to couple to AuthContext
-export async function incrementUsage(
-  userId: string,
-  type: 'leads' | 'audits' | 'messages',
-  amount = 1
-): Promise<void> {
-  const field = type === 'leads'
-    ? 'leads_used_this_month'
-    : type === 'audits'
-    ? 'audits_used_this_month'
-    : 'messages_used_this_month';
-
-  // Fetch current value then increment (Supabase doesn't support atomic increment via REST easily)
-  const { data } = await supabase
-    .from('user_profiles')
-    .select(field)
-    .eq('id', userId)
-    .maybeSingle();
-
-  const current = (data as Record<string, number> | null)?.[field] ?? 0;
-  await supabase
-    .from('user_profiles')
-    .update({ [field]: current + amount, updated_at: new Date().toISOString() })
-    .eq('id', userId);
-}
-
-// Reset monthly usage if 30+ days have passed; returns updated profile
-export async function resetUsageIfNeeded(profile: UserProfile): Promise<UserProfile> {
-  if (isAdmin(profile)) return profile;
-  const cycleStart = new Date(profile.usage_cycle_started_at);
-  const daysPassed = (Date.now() - cycleStart.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysPassed < 30) return profile;
-
-  const updates = {
-    leads_used_this_month: 0,
-    audits_used_this_month: 0,
-    messages_used_this_month: 0,
-    usage_cycle_started_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  await supabase.from('user_profiles').update(updates).eq('id', profile.id);
-  return { ...profile, ...updates };
 }

@@ -1,227 +1,104 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import Stripe from 'npm:stripe@17.7.0';
-import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import type Stripe from 'npm:stripe@17.7.0';
+import { billingDb, proAmount, proCurrency, proPriceId, stripe, topUpAmounts, walletProduct } from '../_shared/stripe-billing.ts';
 
-const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
-const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
-});
-
-// Helper function to create responses with CORS headers
-function corsResponse(body: string | object | null, status = 200) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
-  };
-
-  // For 204 No Content, don't include Content-Type or body
-  if (status === 204) {
-    return new Response(null, { status, headers });
-  }
-
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json',
-    },
-  });
-}
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
+const json = (body: object, status = 200) => Response.json(body, { status, headers });
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   try {
-    if (req.method === 'OPTIONS') {
-      return corsResponse({}, 204);
+    const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1];
+    if (!token) return json({ error: 'Unauthorized' }, 401);
+    const { data: { user }, error: authError } = await billingDb.auth.getUser(token);
+    if (authError || !user) return json({ error: 'Unauthorized' }, 401);
+
+    const { mode, amount, price_id, success_url, cancel_url } = await req.json();
+    const subscription = mode === 'subscription';
+    if (subscription ? (!proPriceId || (price_id != null && price_id !== proPriceId))
+      : (mode !== 'payment' || !topUpAmounts.includes(amount))) {
+      return json({ error: 'This checkout option is unavailable.' }, 400);
     }
-
-    if (req.method !== 'POST') {
-      return corsResponse({ error: 'Method not allowed' }, 405);
-    }
-
-    const { price_id, success_url, cancel_url, mode } = await req.json();
-
-    const error = validateParameters(
-      { price_id, success_url, cancel_url, mode },
-      {
-        cancel_url: 'string',
-        price_id: 'string',
-        success_url: 'string',
-        mode: { values: ['payment', 'subscription'] },
-      },
-    );
-
-    if (error) {
-      return corsResponse({ error }, 400);
-    }
-
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const {
-      data: { user },
-      error: getUserError,
-    } = await supabase.auth.getUser(token);
-
-    if (getUserError) {
-      return corsResponse({ error: 'Failed to authenticate user' }, 401);
-    }
-
-    if (!user) {
-      return corsResponse({ error: 'User not found' }, 404);
-    }
-
-    const { data: customer, error: getCustomerError } = await supabase
-      .from('stripe_customers')
-      .select('customer_id')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (getCustomerError) {
-      console.error('Failed to fetch customer information from the database', getCustomerError);
-
-      return corsResponse({ error: 'Failed to fetch customer information' }, 500);
-    }
-
-    let customerId;
-
-    /**
-     * In case we don't have a mapping yet, the customer does not exist and we need to create one.
-     */
-    if (!customer || !customer.customer_id) {
-      const newCustomer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          userId: user.id,
-        },
-      });
-
-      console.log(`Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
-
-      const { error: createCustomerError } = await supabase.from('stripe_customers').insert({
-        user_id: user.id,
-        customer_id: newCustomer.id,
-      });
-
-      if (createCustomerError) {
-        console.error('Failed to save customer information in the database', createCustomerError);
-
-        // Try to clean up both the Stripe customer and subscription record
-        try {
-          await stripe.customers.del(newCustomer.id);
-          await supabase.from('stripe_subscriptions').delete().eq('customer_id', newCustomer.id);
-        } catch (deleteError) {
-          console.error('Failed to clean up after customer mapping error:', deleteError);
-        }
-
-        return corsResponse({ error: 'Failed to create customer mapping' }, 500);
-      }
-
-      if (mode === 'subscription') {
-        const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-          customer_id: newCustomer.id,
-          status: 'not_started',
-        });
-
-        if (createSubscriptionError) {
-          console.error('Failed to save subscription in the database', createSubscriptionError);
-
-          // Try to clean up the Stripe customer since we couldn't create the subscription
-          try {
-            await stripe.customers.del(newCustomer.id);
-          } catch (deleteError) {
-            console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
-          }
-
-          return corsResponse({ error: 'Unable to save the subscription in the database' }, 500);
-        }
-      }
-
-      customerId = newCustomer.id;
-
-      console.log(`Successfully set up new customer ${customerId} with subscription record`);
-    } else {
-      customerId = customer.customer_id;
-
-      if (mode === 'subscription') {
-        // Verify subscription exists for existing customer
-        const { data: subscription, error: getSubscriptionError } = await supabase
-          .from('stripe_subscriptions')
-          .select('status')
-          .eq('customer_id', customerId)
-          .maybeSingle();
-
-        if (getSubscriptionError) {
-          console.error('Failed to fetch subscription information from the database', getSubscriptionError);
-
-          return corsResponse({ error: 'Failed to fetch subscription information' }, 500);
-        }
-
-        if (!subscription) {
-          // Create subscription record for existing customer if missing
-          const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-            customer_id: customerId,
-            status: 'not_started',
-          });
-
-          if (createSubscriptionError) {
-            console.error('Failed to create subscription record for existing customer', createSubscriptionError);
-
-            return corsResponse({ error: 'Failed to create subscription record for existing customer' }, 500);
-          }
-        }
+    const origin = req.headers.get('Origin');
+    for (const value of [success_url, cancel_url]) {
+      if (typeof value !== 'string') return json({ error: 'Invalid checkout return URL.' }, 400);
+      const url = URL.parse(value);
+      if (!url || url.origin !== origin || (url.protocol !== 'https:' && url.hostname !== 'localhost')) {
+        return json({ error: 'Invalid checkout return URL.' }, 400);
       }
     }
+    const { data: profile, error: profileError } = await billingDb.from('user_profiles')
+      .select('is_active').eq('id', user.id).single();
+    if (profileError) throw profileError;
+    if (!profile.is_active) return json({ error: 'An active account is required.' }, 403);
 
-    // create Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: price_id,
-          quantity: 1,
-        },
-      ],
-      mode,
-      success_url,
-      cancel_url,
+    const { data: customer, error: mappingError } = await billingDb.from('stripe_customers')
+      .select('customer_id').eq('user_id', user.id).is('deleted_at', null).maybeSingle();
+    if (mappingError) throw mappingError;
+    let customerId = customer?.customer_id;
+    if (!customerId) {
+      const created = await stripe.customers.create({ metadata: { userId: user.id } },
+        { idempotencyKey: 'leadscope-customer-' + user.id });
+      const { error } = await billingDb.from('stripe_customers')
+        .insert({ user_id: user.id, customer_id: created.id });
+      // The live schema enforces one active mapping with a partial unique index.
+      // A concurrent insert can win, so read the current mapping on a conflict.
+      if (error && error.code !== '23505') throw error;
+      const { data: saved, error: savedError } = await billingDb.from('stripe_customers')
+        .select('customer_id').eq('user_id', user.id).is('deleted_at', null).single();
+      if (savedError) throw savedError;
+      customerId = saved.customer_id;
+    }
+
+    const checkout: Stripe.Checkout.SessionCreateParams = {
+      customer: customerId, payment_method_types: ['card'],
+      mode: subscription ? 'subscription' : 'payment', success_url, cancel_url,
+      line_items: subscription ? [{ price: proPriceId!, quantity: 1 }] : [{
+        quantity: 1,
+        price_data: { currency: 'usd', unit_amount: amount, product_data: { name: 'LeadScope AI wallet credits' } },
+      }],
+      metadata: { leadscope: subscription ? 'pro_monthly' : walletProduct },
+    };
+    if (!subscription) {
+      const session = await stripe.checkout.sessions.create(checkout);
+      return json({ sessionId: session.id, url: session.url });
+    }
+
+    const price = await stripe.prices.retrieve(proPriceId!);
+    if (!price.active || price.currency !== proCurrency || price.unit_amount !== proAmount
+        || price.recurring?.interval !== 'month' || price.recurring.interval_count !== 1) {
+      throw new Error('STRIPE_PRO_MONTHLY must reference the existing €69 monthly price.');
+    }
+
+    let previous: Stripe.Checkout.Session | undefined;
+    for await (const session of stripe.checkout.sessions.list({ customer: customerId, limit: 25 })) {
+      if (session.mode === 'subscription') {
+        previous = session;
+        break;
+      }
+    }
+    for await (const current of stripe.subscriptions.list({ customer: customerId, status: 'all' })) {
+      if (current.status !== 'canceled' && current.status !== 'incomplete_expired') {
+        return json({ error: 'Manage your existing subscription in the billing portal.' }, 409);
+      }
+    }
+    if (previous?.status === 'open') {
+      if (previous.metadata?.leadscope === 'pro_monthly' && previous.url) {
+        return json({ sessionId: previous.id, url: previous.url });
+      }
+      await stripe.checkout.sessions.expire(previous.id);
+    }
+    const session = await stripe.checkout.sessions.create(checkout, {
+      idempotencyKey: 'leadscope-pro-' + (previous?.id ?? customerId),
     });
-
-    console.log(`Created checkout session ${session.id} for customer ${customerId}`);
-
-    return corsResponse({ sessionId: session.id, url: session.url });
-  } catch (error: any) {
-    console.error(`Checkout error: ${error.message}`);
-    return corsResponse({ error: error.message }, 500);
+    return json({ sessionId: session.id, url: session.url });
+  } catch (error) {
+    console.error('Checkout creation failed:', error);
+    return json({ error: 'Unable to start checkout. Try again or contact support.' }, 503);
   }
 });
-
-type ExpectedType = 'string' | { values: string[] };
-type Expectations<T> = { [K in keyof T]: ExpectedType };
-
-function validateParameters<T extends Record<string, any>>(values: T, expected: Expectations<T>): string | undefined {
-  for (const parameter in values) {
-    const expectation = expected[parameter];
-    const value = values[parameter];
-
-    if (expectation === 'string') {
-      if (value == null) {
-        return `Missing required parameter ${parameter}`;
-      }
-      if (typeof value !== 'string') {
-        return `Expected parameter ${parameter} to be a string got ${JSON.stringify(value)}`;
-      }
-    } else {
-      if (!expectation.values.includes(value)) {
-        return `Expected parameter ${parameter} to be one of ${expectation.values.join(', ')}`;
-      }
-    }
-  }
-
-  return undefined;
-}

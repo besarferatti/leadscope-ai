@@ -1,349 +1,66 @@
-import { useEffect, useState } from 'react';
-import {
-  Check, X, Zap, ChevronLeft, Star,
-} from 'lucide-react';
-import { PLANS, PLAN_DISPLAY_ORDER, PlanId, BillingCycle } from '../lib/plans';
-import { trackEvent } from '../lib/analytics';
+import { useEffect } from 'react';
+import { Check, ChevronLeft } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
+import { trackEvent } from '../lib/analytics';
+import type { BillingCycle, PlanId } from '../lib/plans';
+import { TOP_UP_PACKS } from '../lib/stripe';
 
 interface Props {
   onGetStarted?: () => void;
   onLogin?: () => void;
   onBack?: () => void;
-  // When used inside the app (logged-in user upgrading)
   currentPlan?: PlanId;
-  onSelectPlan?: (planId: PlanId, billingCycle: BillingCycle) => void;
+  onSelectPlan?: (plan: PlanId, cycle: BillingCycle) => void;
   embedded?: boolean;
 }
 
-const PLAN_FEATURES: Record<PlanId, string[]> = {
-  free_trial: [
-    '100 leads per month',
-    '25 AI website audits',
-    '25 AI outreach messages',
-    '5 AI website previews',
-    'AI website preview links',
-    'Public audit share links',
-    'Multilingual audit reports',
-    'Website status targeting',
-    'Saved Leads',
-    'Basic dashboard',
-  ],
-  starter: [
-    '500 leads per month',
-    '100 AI website audits',
-    '100 AI outreach messages',
-    '25 AI website previews',
-    'AI website preview links',
-    'Public audit share links',
-    'Multilingual audit reports',
-    'Website status targeting',
-    'Saved Leads',
-    'Client-ready audit reports',
-    'Manual lead import',
-    'Google Places search',
-    'CSV export',
-    'Lead status tracking',
-    'Basic lead scoring',
-  ],
-  pro: [
-    '2,500 leads per month',
-    '500 AI website audits',
-    '500 AI outreach messages',
-    '150 AI website previews',
-    'AI website preview links',
-    'Public audit share links',
-    'Multilingual audit reports',
-    'Website status targeting',
-    'Saved Leads',
-    'Dynamic preview layouts',
-    'Industry-based images',
-    'Client-ready audit reports',
-    'Google Places lead search',
-    'Advanced filters',
-    'CSV export',
-    '3 team members',
-    'Saved outreach templates',
-    'Bulk analyze up to 50 leads',
-    'Priority AI generation',
-  ],
-  agency: [
-    '10,000 leads per month',
-    '2,000 AI website audits',
-    '2,000 AI outreach messages',
-    '500 AI website previews',
-    'AI website preview links',
-    'Public audit share links',
-    'Multilingual audit reports',
-    'Website status targeting',
-    'Saved Leads',
-    'Dynamic preview layouts',
-    'Industry-based images',
-    'Client-ready audit reports',
-    'Best for lead-to-pitch workflows',
-    '10 team members',
-    'Multiple workspaces',
-    'Advanced lead scoring',
-    'Bulk analyze up to 500 leads',
-    'Bulk outreach message generation',
-    'Saved templates',
-    'Priority support',
-  ],
-  enterprise: [
-    'Unlimited leads',
-    'Unlimited AI website audits',
-    'Unlimited AI outreach messages',
-    'Unlimited AI website previews',
-    'AI website preview links',
-    'Public audit share links',
-    'Multilingual audit reports',
-    'Website status targeting',
-    'Saved Leads',
-    'Dynamic preview layouts',
-    'Industry-based images',
-    'White-label client reports',
-    'Custom monthly limits',
-    'API access',
-    'Custom integrations',
-    'Dedicated onboarding',
-    'Dedicated support',
-  ],
-  admin_unlimited: [],
-};
-
-const DISABLED_FEATURES: Record<PlanId, string[]> = {
-  free_trial: ['CSV export', 'Bulk actions', 'Team members'],
-  starter: ['Bulk actions', 'Team members', 'Saved templates'],
-  pro: ['Multiple workspaces', 'Custom lead scoring', 'Priority support'],
-  agency: ['API access', 'White-label'],
-  enterprise: [],
-  admin_unlimited: [],
-};
-
-const PLAN_BUTTON_TEXT: Record<PlanId, string> = {
-  free_trial: 'Start Free Trial',
-  starter: 'Get Starter',
-  pro: 'Upgrade to Pro',
-  agency: 'Get Agency',
-  enterprise: 'Contact Sales',
-  admin_unlimited: '',
-};
-
 export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSelectPlan, embedded }: Props) {
-  const [billing, setBilling] = useState<BillingCycle>('monthly');
-
   useEffect(() => {
     trackEvent('pricing_viewed', { embedded: Boolean(embedded) });
   }, [embedded]);
 
-  function handleSelect(planId: PlanId) {
-    if (onSelectPlan) {
-      onSelectPlan(planId, billing);
-    } else if (planId === 'enterprise') {
-      window.location.href = 'mailto:sales@leadscope.pro';
-    } else {
-      onGetStarted?.();
-    }
-  }
-
   return (
-    <div className={`min-h-screen bg-slate-950 ${embedded ? '' : 'py-16 px-4'}`}>
+    <div className={embedded ? '' : 'min-h-screen bg-slate-950 px-4 py-12'}>
       {!embedded && (
-        <div className="max-w-6xl mx-auto">
-          {/* Nav */}
-          <div className="flex items-center justify-between mb-16">
-            <BrandLogo />
-            <div className="flex items-center gap-4">
-              {onBack && (
-                <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
-                  <ChevronLeft className="w-4 h-4" />
-                  Back
-                </button>
-              )}
-              {onLogin && (
-                <button onClick={onLogin} className="btn-secondary text-sm py-2">Sign In</button>
-              )}
-              {onGetStarted && (
-                <button onClick={onGetStarted} className="btn-primary text-sm py-2">Get Started</button>
-              )}
-            </div>
+        <div className="mx-auto mb-12 flex max-w-5xl flex-wrap items-center justify-between gap-4">
+          <BrandLogo />
+          <div className="flex items-center gap-4">
+            {onBack && <button onClick={onBack} className="btn-secondary"><ChevronLeft size={16} /> Back</button>}
+            {onLogin && <button onClick={onLogin} className="btn-secondary">Sign In</button>}
           </div>
         </div>
       )}
-
-      <div className={`${embedded ? '' : 'max-w-6xl mx-auto'}`}>
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4 leading-tight">
-            Simple pricing for agencies<br className="hidden sm:block" /> that want better leads.
-          </h1>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
-            Find local businesses with weak websites, poor SEO, and missing booking systems. LeadScope AI helps web design, SEO, and marketing agencies discover real opportunities and generate personalized outreach messages.
-          </p>
-
-          {/* Billing toggle */}
-          <div className="inline-flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-1.5">
-            <button
-              onClick={() => setBilling('monthly')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                billing === 'monthly'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBilling('yearly')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                billing === 'yearly'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Yearly
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-400'
-              }`}>
-                2 months free
-              </span>
-            </button>
+      <div className="mx-auto max-w-lg space-y-6">
+        {!embedded && (
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-white">LeadScope AI Pricing</h1>
+            <p className="mt-3 text-slate-400">Core CRM is free. Use credits for lead search, AI, and outreach.</p>
           </div>
-          {billing === 'yearly' && (
-            <p className="text-emerald-400 text-sm mt-3 font-medium">Get 2 months free with yearly billing</p>
-          )}
-        </div>
-
-        {/* Plans grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {PLAN_DISPLAY_ORDER.map(planId => {
-            const plan = PLANS[planId];
-            const isPopular = plan.popular;
-            const isCurrent = currentPlan === planId;
-            const price = billing === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-            const features = PLAN_FEATURES[planId];
-            const disabled = DISABLED_FEATURES[planId];
-
-            return (
-              <div
-                key={planId}
-                className={`relative flex flex-col rounded-2xl border p-6 transition-all duration-200 ${
-                  isPopular
-                    ? 'bg-blue-600/10 border-blue-500/50 shadow-lg shadow-blue-500/10'
-                    : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                } ${isCurrent ? 'ring-2 ring-blue-500' : ''}`}
-              >
-                {isPopular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                      <Star className="w-3 h-3 fill-white" />
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-                {isCurrent && (
-                  <div className="absolute -top-3 right-4">
-                    <span className="bg-emerald-600 text-white text-xs font-semibold px-3 py-1 rounded-full">Current</span>
-                  </div>
-                )}
-
-                <div className="mb-5">
-                  <h3 className="text-white font-bold text-lg mb-1">{plan.name}</h3>
-                  {planId === 'enterprise' ? (
-                    <div className="mt-2">
-                      <span className="text-3xl font-black text-white">Custom</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-end gap-1 mt-2">
-                      <span className="text-3xl font-black text-white">€{price}</span>
-                      <span className="text-slate-400 text-sm mb-1">
-                        {billing === 'yearly' ? '/year' : '/mo'}
-                      </span>
-                    </div>
-                  )}
-                  {billing === 'yearly' && plan.monthlyPrice !== null && plan.monthlyPrice > 0 && (
-                    <p className="text-slate-500 text-xs mt-1">
-                      €{Math.round((plan.yearlyPrice ?? 0) / 12)}/mo billed annually
-                    </p>
-                  )}
-                </div>
-
-                {/* Limits summary */}
-                <div className="mb-5 p-3 rounded-lg bg-slate-800/60 space-y-1 text-xs">
-                  <div className="flex justify-between text-slate-300">
-                    <span>Leads/mo</span>
-                    <span className="font-semibold">{plan.leadsLimit === -1 ? 'Unlimited' : plan.leadsLimit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>AI Audits/mo</span>
-                    <span className="font-semibold">{plan.auditsLimit === -1 ? 'Unlimited' : plan.auditsLimit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>Messages/mo</span>
-                    <span className="font-semibold">{plan.messagesLimit === -1 ? 'Unlimited' : plan.messagesLimit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>Website previews/mo</span>
-                    <span className="font-semibold">{plan.websitePreviewsLimit === -1 ? 'Unlimited' : plan.websitePreviewsLimit.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Features */}
-                <ul className="space-y-2 flex-1 mb-6">
-                  {features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                  {disabled.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-                      <X className="w-4 h-4 text-slate-700 flex-shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  onClick={() => handleSelect(planId)}
-                  disabled={isCurrent}
-                  className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                    isCurrent
-                      ? 'bg-slate-800 text-slate-500 cursor-default'
-                      : isPopular
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  }`}
-                >
-                  {isCurrent ? 'Current Plan' : (
-                    <>
-                      <Zap className="w-4 h-4" />
-                      {PLAN_BUTTON_TEXT[planId]}
-                    </>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-900 p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="max-w-2xl">
-            <p className="text-xs uppercase tracking-[.16em] font-semibold text-blue-400">Enterprise</p>
-            <h2 className="text-2xl font-semibold text-white mt-2">Custom volume, integrations, and support.</h2>
-            <p className="text-slate-400 text-sm leading-relaxed mt-3">
-              Custom usage limits, API access, white-label reports, dedicated onboarding, and pricing built around your workflow.
-            </p>
-          </div>
-          <button onClick={() => handleSelect('enterprise')} className="btn-secondary px-6 py-3 shrink-0">
-            Contact sales
+        )}
+        <section className="card border-blue-500/40 p-6">
+          <h2 className="text-xl font-semibold text-white">PRO</h2>
+          <p className="mt-2 text-3xl font-bold text-white">€69 <span className="text-sm font-normal text-slate-400">/ month</span></p>
+          <ul className="my-5 space-y-2 text-sm text-slate-300">
+            <li className="flex gap-2"><Check size={16} className="text-emerald-400" /> 7,400 credits per billing cycle, including 500 bonus credits</li>
+            <li className="flex gap-2"><Check size={16} className="text-emerald-400" /> Monthly credits expire at the end of the billing cycle</li>
+            <li className="flex gap-2"><Check size={16} className="text-emerald-400" /> Monthly credits are used before top-ups</li>
+          </ul>
+          <button className="btn-primary w-full justify-center" disabled={currentPlan === 'pro'}
+            onClick={() => onSelectPlan ? onSelectPlan('pro', 'monthly') : onGetStarted?.()}>
+            {currentPlan === 'pro' ? 'Current plan' : 'Subscribe to PRO'}
           </button>
-        </div>
-
-        {/* Footer note */}
-        <p className="text-center text-slate-600 text-sm mt-10">
-          Every paid plan starts with a 7-day free trial. No credit card required to start. Cancel anytime.
-        </p>
+        </section>
+        <section className="card p-6">
+          <h2 className="font-semibold text-white">Wallet top-ups</h2>
+          <p className="mt-1 text-sm text-slate-400">Top-ups are charged in USD. These credits never expire.</p>
+          <dl className="mt-3 space-y-2 text-sm text-slate-300">
+            {TOP_UP_PACKS.map(pack => (
+              <div className="flex justify-between" key={pack.cents}>
+                <dt>${pack.cents / 100}</dt><dd>{pack.credits.toLocaleString()} credits</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </div>
     </div>
   );

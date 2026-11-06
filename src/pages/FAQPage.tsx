@@ -20,7 +20,7 @@ const faqs = [
   ['What are AI Website Preview Links?', 'AI Website Preview Links turn a business audit into a visual website concept that can be shared with a prospect. They use industry-specific layout and copy, business-specific visuals, and dynamic variations that can be regenerated.'],
   ['Can I generate outreach messages?', 'Yes. LeadScope AI generates personalized email and direct-message drafts using lead data, audit issues, SEO opportunities, and your agency settings—without placeholder sender information.'],
   ['What are Saved Leads?', 'Saved Leads lets you keep the highest-potential prospects from a search in one place, so your team can return to the audit, report, preview, and outreach work when it is time to pitch.'],
-  ['Is there a free trial?', 'Yes. LeadScope AI includes a free trial so users can test core features with usage limits before upgrading.'],
+  ['What can I use for free?', 'The core CRM is free. Lead search, AI tools, and outreach use credits. PRO includes 7,400 monthly credits, and you can purchase top-ups in Billing.'],
   ['Can agencies use LeadScope AI for client outreach?', 'Yes. LeadScope AI is designed to help agencies find prospects, understand their needs, and present better offers through audits, SEO insights, outreach messages, and website preview links.'],
   ['Do I need technical skills to use LeadScope AI?', 'No. LeadScope AI is designed for agencies and freelancers who want practical lead generation and sales assets without manually researching every business.'],
 ] as const;

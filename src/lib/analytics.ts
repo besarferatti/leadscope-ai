@@ -21,7 +21,7 @@ export function initAnalytics() {
     window.gtag = window.gtag || function gtag(...args: GtagCommand) {
       window.dataLayer?.push(args);
     };
-  } catch (_) {
+  } catch {
     // Analytics must never break the app.
   }
 }
@@ -33,7 +33,7 @@ export function trackPageView(path: string) {
       page_path: path,
       debug_mode: true,
     });
-  } catch (_) {
+  } catch {
     // Analytics must never break the app.
   }
 }
@@ -45,7 +45,7 @@ export function trackEvent(eventName: string, params?: Record<string, unknown>) 
       ...(params ?? {}),
       debug_mode: true,
     });
-  } catch (_) {
+  } catch {
     // Analytics must never break the app.
   }
 }
