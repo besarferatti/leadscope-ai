@@ -511,7 +511,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
               </div>
               <div className="bg-slate-800/50 rounded-lg p-3">
                 <p className="text-slate-500 text-xs mb-1">Status</p>
-                <span className={`badge ${statusBadge}`}>{profile?.subscription_status ?? '—'}</span>
+                <span className={`badge ${statusBadge}`}>{profile?.current_plan === 'free_trial' ? 'Free CRM' : profile?.subscription_status ?? '—'}</span>
               </div>
             </div>
           </div>
@@ -526,7 +526,8 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
                 <h2 className="font-semibold text-white">PRO subscription</h2>
                 <p className="text-sm text-slate-300">$69 per month · 7,400 credits each paid cycle</p>
                 <div className="flex flex-wrap gap-3">
-                  {!['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete'].includes(profile?.subscription_status ?? '') && (
+                  {(profile?.current_plan === 'free_trial' ||
+                    !['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete'].includes(profile?.subscription_status ?? '')) && (
                     <button onClick={() => void handleUpgrade()} disabled={upgrading} className="btn-primary">
                       {upgrading ? 'Opening checkout…' : 'Subscribe to PRO'}
                     </button>
