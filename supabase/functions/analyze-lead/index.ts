@@ -1,4 +1,5 @@
 import { chargeCredits } from '../_shared/credits.ts';
+import { fetchPublicHtml } from '../_shared/public-website.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -138,14 +139,10 @@ async function fetchWebsiteSignals(rawUrl: string): Promise<WebsiteSignals> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "text/html,application/xhtml+xml" }, redirect: "follow" });
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!response.ok) return emptyWebsiteSignals(url.toString(), "failed", `Website returned HTTP ${response.status}.`);
-    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) return emptyWebsiteSignals(url.toString(), "failed", "Website response was not HTML.");
-    const html = (await response.text()).slice(0, 60000);
-    return extractWebsiteSignals(html, url, response.url);
-  } catch (err: unknown) {
-    const failureReason = err instanceof DOMException && err.name === "AbortError" ? "Website fetch timed out." : "Website HTML could not be fetched.";
+    const page = await fetchPublicHtml(url, controller.signal);
+    return extractWebsiteSignals(page.html, url, page.url);
+  } catch {
+    const failureReason = controller.signal.aborted ? "Website fetch timed out." : "Website HTML could not be fetched.";
     return emptyWebsiteSignals(url.toString(), "failed", failureReason);
   } finally {
     clearTimeout(timeoutId);
