@@ -1,4 +1,4 @@
-import { chargeCredits } from '../supabase/functions/_shared/credits.ts';
+import { chargeCredits } from '../supabase/functions/_shared/credits.js';
 import { createDecipheriv, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';

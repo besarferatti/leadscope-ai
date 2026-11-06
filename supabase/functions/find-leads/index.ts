@@ -1,4 +1,4 @@
-import { chargeCredits } from '../_shared/credits.ts';
+import { chargeCredits } from '../_shared/credits.js';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 

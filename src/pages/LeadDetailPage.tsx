@@ -135,9 +135,9 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
     try {
       const accessToken = await getFreshAccessToken();
       const response = await fetch('/api/find-lead-email', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ leadId: lead.id }) });
-      const data = await response.json() as { status?: string; error?: string; message?: string; email?: string; confidence?: number; sourceUrl?: string; sourceType?: Lead['email_source_type']; emailStatus?: Lead['email_status'] };
       if (response.status === 401) throw new Error('Your session has expired. Please sign in again.');
-      if (!response.ok) throw new Error(data.error || 'Unable to search the website.');
+      const data = await response.json().catch(() => null) as { status?: string; error?: string; message?: string; email?: string; confidence?: number; sourceUrl?: string; sourceType?: Lead['email_source_type']; emailStatus?: Lead['email_status'] } | null;
+      if (!response.ok || !data) throw new Error(data?.error || 'Email search is temporarily unavailable. Please try again.');
       if (data.status === 'not_found' || data.status === 'no_website' || data.status === 'rejected') { setEmailFindMessage(data.message || 'No verified public business email was found.'); await loadAll(); return; }
       if (data.status !== 'found') throw new Error(data.error || 'Unable to search the website.');
       setLead(current => current ? { ...current, email: data.email ?? current.email, email_confidence: data.confidence ?? null, email_source_url: data.sourceUrl ?? null, email_source_type: data.sourceType ?? null, email_status: data.emailStatus ?? 'validated' } : current);
@@ -424,8 +424,8 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
           body,
         }),
       });
-      const data = await response.json() as { error?: string; success?: boolean };
-      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to send email.');
+      const data = await response.json().catch(() => null) as { error?: string; success?: boolean } | null;
+      if (!response.ok || !data?.success) throw new Error(data?.error || 'Unable to send email. Please try again.');
 
       setSentMessageId(message.id);
       setLead(current => current ? { ...current, status: 'Contacted' } : current);

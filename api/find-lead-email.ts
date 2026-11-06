@@ -1,4 +1,4 @@
-import { chargeCredits } from '../supabase/functions/_shared/credits.ts';
+import { chargeCredits } from '../supabase/functions/_shared/credits.js';
 import { lookup, resolveMx } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
