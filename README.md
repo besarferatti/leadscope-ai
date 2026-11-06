@@ -25,7 +25,7 @@ To run the UI against an isolated development project, set `VITE_SUPABASE_URL` a
 
 ## Database rollout boundary
 
-The migration history currently does not replay cleanly on an empty database. Do not run a blind `supabase db push` against any existing project. New profile hardening is in `supabase/migrations/20261016000000_harden_profile_authorization.sql`, tested against local auth/profile fixtures. Reconcile staging migration history and test there first. The new migration must precede deployment of the updated profile recovery client.
+The migration history replays on a local PostgreSQL database with Supabase Auth and Storage fixtures. Verify remote migration history before pushing to an existing project. Apply `20261106023524_harden_profile_authorization.sql` before deploying the profile recovery client and wallet changes.
 
 ## External side effects
 

@@ -11,7 +11,7 @@ const other = randomUUID();
 const admin = randomUUID();
 const epoch = Math.floor(Date.now() / 1000);
 const migrations = new URL('../supabase/migrations/', import.meta.url);
-const walletMigration = '20261106000000_credit_wallet.sql';
+const walletMigration = '20261106023534_credit_wallet.sql';
 async function migrate(name) {
   try {
     await db.exec(await readFile(new URL(name, migrations), 'utf8'));

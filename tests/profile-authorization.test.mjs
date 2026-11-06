@@ -9,7 +9,7 @@ const other = '00000000-0000-4000-8000-000000000002';
 const admin = '00000000-0000-4000-8000-000000000003';
 const inactive = '00000000-0000-4000-8000-000000000004';
 const missing = '00000000-0000-4000-8000-000000000005';
-const migration = '20261016000000_harden_profile_authorization.sql';
+const migration = '20261106023524_harden_profile_authorization.sql';
 async function migrate(name) {
   await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'));
 }
