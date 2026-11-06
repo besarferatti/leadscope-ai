@@ -164,7 +164,7 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
             {mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-slate-400 text-sm mb-6">
-            {mode === 'login' ? 'Sign in to your LeadScope AI account.' : 'Start your 7-day free trial today.'}
+            {mode === 'login' ? 'Sign in to your LeadScope AI account.' : 'Create your free CRM account.'}
           </p>
 
           {error && <ErrorAlert message={error} onClose={() => setError('')} />}

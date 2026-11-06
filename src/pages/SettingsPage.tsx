@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
   Key, Building2, Globe, Save, Eye, EyeOff, CheckCircle, ShieldCheck,
-  User, CreditCard, Shield, BarChart3, MessageSquare, Users as UsersIcon,
-  TrendingUp, Clock, Zap, Mail,
+  User, CreditCard, Shield, Zap, Mail,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { LANGUAGES, TONES } from '../lib/utils';
 import {
-  isAdmin, getPlanLimits, getTrialDaysLeft, isTrialExpired,
-  getPlanBadgeColor, getSubscriptionStatusColor, PLANS, CHANGEABLE_PLANS, PlanId,
-  getStripePriceId,
+  isAdmin, getPlanBadgeColor, getSubscriptionStatusColor, PLANS,
 } from '../lib/plans';
 import { createCheckoutSession, createPortalSession } from '../lib/stripe';
+import { CreditWallet } from '../components/CreditWallet';
 import type { SmtpSettings } from '../types';
 
 type Tab = 'profile' | 'api-keys' | 'smtp' | 'billing' | 'security' | 'email-preferences';
@@ -48,29 +46,6 @@ interface Props {
   initialTab?: Tab;
 }
 
-function UsageBar({ label, used, limit, icon: Icon }: { label: string; used: number; limit: number; icon: React.ElementType }) {
-  const pct = limit === -1 ? 0 : Math.min(100, Math.round((used / limit) * 100));
-  const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500';
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <Icon className="w-3.5 h-3.5" />
-          {label}
-        </div>
-        <span className="text-slate-300 text-sm font-medium">
-          {limit === -1 ? `${used.toLocaleString()} / ∞` : `${used.toLocaleString()} / ${limit.toLocaleString()}`}
-        </span>
-      </div>
-      {limit !== -1 && (
-        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-          <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function SettingsPage({ onNavigate, initialTab }: Props) {
   const { user, profile, refreshProfile } = useAuth();
   const [tab, setTab] = useState<Tab>(initialTab ?? (profile?.current_plan === 'free_trial' ? 'billing' : 'profile'));
@@ -84,17 +59,13 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [savedMessage, setSavedMessage] = useState('Saved successfully.');
-  const [upgradingTo, setUpgradingTo] = useState<PlanId | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState('');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [portalLoading, setPortalLoading] = useState(false);
   const [productUpdatesEnabled, setProductUpdatesEnabled] = useState(true);
   const [emailPreferencesSaving, setEmailPreferencesSaving] = useState(false);
 
   const admin = isAdmin(profile);
-  const limits = getPlanLimits(profile);
-  const trialDays = getTrialDaysLeft(profile);
-  const trialExpired = isTrialExpired(profile);
   const planName = profile ? (PLANS[profile.current_plan]?.name ?? profile.current_plan) : '';
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
   const statusBadge = profile ? getSubscriptionStatusColor(profile.subscription_status) : '';
@@ -237,26 +208,13 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
     }
   }
 
-  async function handleUpgrade(planId: PlanId) {
-    if (planId === 'enterprise') {
-      window.location.href = 'mailto:sales@leadscope.pro';
-      return;
-    }
-    // Users with an active paid subscription must use the portal to change plans —
-    // creating a new checkout would open a second subscription (double billing).
-    if (profile?.current_plan && profile.current_plan !== 'free_trial') {
-      return handleManageBilling();
-    }
-    setUpgradingTo(planId);
+  async function handleUpgrade() {
+    setUpgrading(true);
     setUpgradeMsg('');
-    const { url, error } = await createCheckoutSession(planId, billingCycle);
-    if (error) {
-      setUpgradeMsg('Error: ' + error);
-      setUpgradingTo(null);
-      return;
-    }
-    if (url) window.location.href = url;
-    setUpgradingTo(null);
+    const { url, error } = await createCheckoutSession('pro', 'monthly');
+    if (url) window.location.assign(url);
+    else setUpgradeMsg(error ?? 'Could not open checkout.');
+    setUpgrading(false);
   }
 
   async function handleManageBilling() {
@@ -555,117 +513,35 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
                 <p className="text-slate-500 text-xs mb-1">Status</p>
                 <span className={`badge ${statusBadge}`}>{profile?.subscription_status ?? '—'}</span>
               </div>
-              {profile?.current_plan === 'free_trial' && (
-                <div className="bg-slate-800/50 rounded-lg p-3 col-span-2">
-                  <p className="text-slate-500 text-xs mb-1">Trial Ends</p>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    <p className="text-slate-300 text-sm">
-                      {trialExpired ? 'Expired' : `${trialDays} day${trialDays !== 1 ? 's' : ''} remaining`}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
-
-          <div className="card p-6">
-            <h2 className="text-white font-semibold mb-4">Monthly Usage</h2>
-            {admin ? (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                <Shield className="w-5 h-5 text-red-400" />
-                <p className="text-red-400 text-sm font-medium">Admin Unlimited — No usage limits apply.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <UsageBar label="Leads" used={profile?.leads_used_this_month ?? 0} limit={limits.leadsLimit} icon={UsersIcon} />
-                <UsageBar label="AI Audits" used={profile?.audits_used_this_month ?? 0} limit={limits.auditsLimit} icon={BarChart3} />
-                <UsageBar label="Outreach Messages" used={profile?.messages_used_this_month ?? 0} limit={limits.messagesLimit} icon={MessageSquare} />
-              </div>
-            )}
           </div>
 
           {!admin && (
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-white font-semibold">
-                      {profile?.current_plan !== 'free_trial' ? 'Change Plan' : 'Upgrade Plan'}
-                    </h2>
-                    <p className="text-slate-500 text-xs">
-                      {profile?.current_plan !== 'free_trial'
-                        ? 'Manage your subscription via the billing portal'
-                        : 'Secure checkout powered by Stripe'}
-                    </p>
-                  </div>
-                </div>
-                {/* Billing cycle toggle */}
-                <div className="flex items-center gap-1 p-1 bg-slate-800 border border-slate-700 rounded-lg">
-                  <button
-                    onClick={() => setBillingCycle('monthly')}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${billingCycle === 'monthly' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    onClick={() => setBillingCycle('yearly')}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${billingCycle === 'yearly' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    Yearly
-                    <span className={`text-xs px-1 rounded-full font-semibold ${billingCycle === 'yearly' ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-400'}`}>-20%</span>
-                  </button>
-                </div>
+            <>
+              <div className="card p-6">
+                <h2 className="mb-4 font-semibold text-white">Credit wallet</h2>
+                <CreditWallet />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {CHANGEABLE_PLANS.filter(p => p.id !== 'admin_unlimited' && p.id !== 'free_trial').map(p => {
-                  const plan = PLANS[p.id];
-                  const isCurrent = profile?.current_plan === p.id;
-                  const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-                  const hasPriceId = !!getStripePriceId(p.id, billingCycle);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleUpgrade(p.id)}
-                      disabled={isCurrent || upgradingTo !== null}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        isCurrent
-                          ? 'border-blue-500/40 bg-blue-500/10 cursor-default'
-                          : 'border-slate-700 bg-slate-800/50 hover:border-blue-500/40 hover:bg-blue-500/5'
-                      }`}
-                    >
-                      <p className="text-slate-200 text-sm font-medium">{plan.name}</p>
-                      <p className="text-slate-500 text-xs mt-0.5">
-                        {price === null ? 'Custom' : `€${price}${billingCycle === 'yearly' ? '/yr' : '/mo'}`}
-                      </p>
-                      {!hasPriceId && p.id !== 'enterprise' && (
-                        <p className="text-amber-400 text-xs mt-1">Price ID not set</p>
-                      )}
-                      {isCurrent && <p className="text-blue-400 text-xs mt-1">Current</p>}
-                      {upgradingTo === p.id && <p className="text-slate-400 text-xs mt-1">Redirecting...</p>}
+              <div className="card space-y-4 p-6">
+                <h2 className="font-semibold text-white">PRO subscription</h2>
+                <p className="text-sm text-slate-300">$69 per month · 7,400 credits each paid cycle</p>
+                <div className="flex flex-wrap gap-3">
+                  {!['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete'].includes(profile?.subscription_status ?? '') && (
+                    <button onClick={() => void handleUpgrade()} disabled={upgrading} className="btn-primary">
+                      {upgrading ? 'Opening checkout…' : 'Subscribe to PRO'}
                     </button>
-                  );
-                })}
+                  )}
+                  <button onClick={() => void handleManageBilling()} disabled={portalLoading} className="btn-secondary">
+                    {portalLoading ? 'Opening…' : 'Manage billing and invoices'}
+                  </button>
+                  {onNavigate && (
+                    <button onClick={() => onNavigate('pricing')} className="btn-secondary">
+                      <Zap className="w-3.5 h-3.5" /> View pricing
+                    </button>
+                  )}
+                </div>
               </div>
-              {profile?.current_plan !== 'free_trial' && (
-                <button
-                  onClick={handleManageBilling}
-                  disabled={portalLoading}
-                  className="btn-secondary text-xs py-2 mt-4"
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  {portalLoading ? 'Opening...' : 'Manage Billing & Invoices'}
-                </button>
-              )}
-              {onNavigate && (
-                <button onClick={() => onNavigate('pricing')} className="btn-secondary text-xs py-2 mt-2 ml-2">
-                  <Zap className="w-3.5 h-3.5" /> View Pricing Page
-                </button>
-              )}
-            </div>
+            </>
           )}
         </div>
       )}

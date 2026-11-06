@@ -1,3 +1,4 @@
+import { chargeCredits } from '../supabase/functions/_shared/credits.ts';
 import { createDecipheriv, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
@@ -227,6 +228,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     body,
     provider: 'smtp',
   };
+
+  const creditError = await chargeCredits(supabaseAdmin, user.id, 'email_send');
+  if (creditError) return errorResponse(res, creditError.message, creditError.status);
 
   try {
     const delivery = await transporter.sendMail({

@@ -1,3 +1,4 @@
+import { chargeCredits } from '../_shared/credits.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -7,8 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
-type UserProfile = { id: string; email: string; full_name: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; messages_used_this_month: number; is_active: boolean };
+type UserProfile = { id: string; email: string; full_name: string; role: "admin" | "user" };
 type UserSettings = { id: string; agency_name: string | null; agency_website: string | null };
 type SenderIdentity = { name: string; position: string; agencyName: string; agencyWebsite: string; phone: string };
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
@@ -16,7 +16,6 @@ type Audit = { website_score: number; seo_score: number; conversion_score: numbe
 type OutreachPayload = { subject: string; body: string };
 type OutreachStyle = "natural_helpful" | "direct_concise" | "founder_to_founder";
 
-const messageLimits: Record<PlanId, number> = { free_trial: 25, starter: 100, pro: 500, agency: 2000, enterprise: -1, admin_unlimited: -1 };
 
 function jsonResponse(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
 function errorResponse(message: string, status = 400) { return jsonResponse({ error: message }, status); }
@@ -67,15 +66,6 @@ function applySenderIdentity(message: string, sender: SenderIdentity, ensureSign
 
   return `${cleaned}\n\n${signature}`.trim();
 }
-function enforceMessageLimit(profile: UserProfile): string | null {
-  if (isAdmin(profile)) return null;
-  if (!profile.is_active) return "Your account is inactive. Please contact support.";
-  if (profile.current_plan === "free_trial" && new Date(profile.trial_ends_at) < new Date()) return "Your free trial has ended. Upgrade your plan to continue using LeadScope AI.";
-  const limit = messageLimits[profile.current_plan] ?? messageLimits.free_trial;
-  if (limit !== -1 && profile.messages_used_this_month >= limit) return profile.current_plan === "free_trial" ? "You’ve reached your free trial limit of 25 outreach messages. Upgrade to continue." : "You've reached your monthly outreach message limit. Upgrade your plan to generate more personalized messages.";
-  return null;
-}
-
 const bannedOpenings = [
   "i came across your website",
   "i was browsing your website",
@@ -109,7 +99,7 @@ Deno.serve(async (req: Request) => {
     if (!lead_id || !channel || !language || !tone) return errorResponse("lead_id, channel, language, and tone are required");
     if (channel !== "email" && channel !== "dm") return errorResponse("channel must be either email or dm");
 
-    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, email, full_name, role, current_plan, trial_ends_at, messages_used_this_month, is_active").eq("id", user.id).maybeSingle();
+    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, email, full_name, role").eq("id", user.id).maybeSingle();
     if (profileError || !profile) return errorResponse("User profile not found", 404);
     const typedProfile = profile as UserProfile;
 
@@ -134,9 +124,9 @@ Deno.serve(async (req: Request) => {
     const typedLead = lead as Lead;
     if (!isAdmin(typedProfile) && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
-    const limitError = enforceMessageLimit(typedProfile);
-    if (limitError) return errorResponse(limitError, 403);
 
+    const creditError = await chargeCredits(serviceClient, user.id, channel === "dm" ? "dm_generation" : "email_generation");
+    if (creditError) return errorResponse(creditError.message, creditError.status);
     const { data: audit } = await serviceClient.from("lead_audits").select("website_score, seo_score, conversion_score, main_issues, recommended_offer, personalization_angle").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const typedAudit = audit as Audit | null;
     const auditContext = typedAudit ? `Verified audit evidence: website score ${typedAudit.website_score}/100, SEO score ${typedAudit.seo_score}/100, conversion score ${typedAudit.conversion_score}/100. Main issues: ${typedAudit.main_issues.join(", ")}. Recommended offer: ${typedAudit.recommended_offer}. Personalization angle: ${typedAudit.personalization_angle}.` : "No website audit is available. Do not imply that you visited, reviewed, browsed, or analyzed the website.";
@@ -191,10 +181,6 @@ Return raw JSON only (no markdown):
     if (insertError) return errorResponse(`Failed to save outreach message: ${insertError.message}`, 500);
     const { error: leadUpdateError } = await serviceClient.from("leads").update({ status: "Message Generated" }).eq("id", lead_id);
     if (leadUpdateError) return errorResponse(`Failed to update lead: ${leadUpdateError.message}`, 500);
-    if (!isAdmin(typedProfile)) {
-      const { error: usageError } = await serviceClient.from("user_profiles").update({ messages_used_this_month: typedProfile.messages_used_this_month + 1, updated_at: new Date().toISOString() }).eq("id", user.id);
-      if (usageError) return errorResponse(`Failed to update usage: ${usageError.message}`, 500);
-    }
     return jsonResponse({ message });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to generate outreach message.";

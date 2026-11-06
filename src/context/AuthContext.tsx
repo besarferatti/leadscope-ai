@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { UserProfile, resetUsageIfNeeded, PlanId } from '../lib/plans';
+import { UserProfile, PlanId } from '../lib/plans';
 
 interface AuthContextType {
   session: Session | null;
@@ -126,8 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? normalizeProfile(data as UserProfile)
           : await createDefaultProfile();
 
-        const updated = await resetUsageIfNeeded(loadedProfile);
-        setProfile(updated);
+        setProfile(loadedProfile);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unable to load your profile.';

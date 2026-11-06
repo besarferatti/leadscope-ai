@@ -1,3 +1,4 @@
+import { chargeCredits } from '../_shared/credits.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -21,10 +22,6 @@ function errorResponse(message: string, status = 400) {
 
 type WebsiteStatus = "has_website" | "no_website" | "social_only";
 type WebsiteStatusFilter = "all" | WebsiteStatus;
-type PlanId = "free_trial" | "starter" | "pro" | "agency" | "enterprise" | "admin_unlimited";
-type UserProfile = { id: string; role: "admin" | "user"; current_plan: PlanId; trial_ends_at: string; is_active: boolean };
-const FREE_TRIAL_LEAD_SEARCH_LIMIT = 30;
-const FREE_TRIAL_SAVED_LEAD_LIMIT = 100;
 
 type GooglePlace = {
   name: string;
@@ -254,30 +251,14 @@ Deno.serve(async (req: Request) => {
       return errorResponse("search_id, niche, and location are required");
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("id, role, current_plan, trial_ends_at, is_active")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profileError || !profile) return errorResponse("User profile not found", 404);
-    const typedProfile = profile as UserProfile;
-    const isAdmin = typedProfile.role === "admin";
-    if (!typedProfile.is_active && !isAdmin) return errorResponse("Your account is inactive. Please contact support.", 403);
-    if (!isAdmin && typedProfile.current_plan === "free_trial" && new Date(typedProfile.trial_ends_at) < new Date()) {
-      return errorResponse("Your free trial has ended. Upgrade your plan to continue using LeadScope AI.", 403);
-    }
-    if (!isAdmin && typedProfile.current_plan === "free_trial") {
-      const { count: searchCount, error: searchCountError } = await supabase
-        .from("lead_searches")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id);
-      if (searchCountError) return errorResponse(`Failed to check lead search limit: ${searchCountError.message}`, 500);
-      if ((searchCount ?? 0) > FREE_TRIAL_LEAD_SEARCH_LIMIT) {
-        return errorResponse("You’ve reached your free trial limit of 30 lead searches. Upgrade to continue.", 403);
-      }
-    }
-
+    const { data: search, error: searchError } = await supabase.from("lead_searches")
+      .select("id").eq("id", search_id).eq("user_id", user.id).maybeSingle();
+    if (searchError) return errorResponse("Unable to verify lead search.", 500);
+    if (!search) return errorResponse("Lead search not found.", 404);
     const apiKey = Deno.env.get("GOOGLE_PLACES_API_KEY")?.trim();
+    if (!apiKey) return errorResponse("Google Places API key is not configured on the server.", 500);
+    const creditError = await chargeCredits(supabase, user.id, "lead_search");
+    if (creditError) return errorResponse(creditError.message, creditError.status);
 
     const maxPages = DEFAULT_MAX_PAGES;
     const maxResultsScanned = DEFAULT_MAX_RESULTS_SCANNED;
@@ -531,13 +512,13 @@ Deno.serve(async (req: Request) => {
         .filter(([googleMapsUrl]) => Boolean(googleMapsUrl))
     );
 
-    const existingByNamePhone = new Map(
+    const existingByNamePhone = new Map<string, ExistingLead>(
       existingLeadsList
         .map((l) => [`${normalizeKey(l.business_name)}_${normalizePhone(l.phone)}`, l] as const)
         .filter(([namePhone]) => !namePhone.endsWith("_"))
     );
 
-    const existingByNameAddress = new Map(
+    const existingByNameAddress = new Map<string, ExistingLead>(
       existingLeadsList
         .map((l) => [`${normalizeKey(l.business_name)}_${normalizeKey(l.address)}`, l] as const)
         .filter(([nameAddress]) => !nameAddress.endsWith("_"))
@@ -547,9 +528,7 @@ Deno.serve(async (req: Request) => {
     let inserted = 0;
     let updated = 0;
     let skipped_duplicates = 0;
-    let skipped_due_to_saved_lead_limit = 0;
-    const savedLeadLimit = !isAdmin && typedProfile.current_plan === "free_trial" ? FREE_TRIAL_SAVED_LEAD_LIMIT : -1;
-    let remainingSavedLeadSlots = savedLeadLimit === -1 ? Number.POSITIVE_INFINITY : Math.max(0, savedLeadLimit - existingLeadsList.length);
+    const skipped_due_to_saved_lead_limit = 0;
     for (const place of detailedResults) {
       const leadWebsite = (place.website ?? "").trim();
       const website = normalizeKey(leadWebsite);
@@ -592,7 +571,7 @@ Deno.serve(async (req: Request) => {
         || (website && existingByWebsite.get(website))
         || (!namePhone.endsWith("_") && existingByNamePhone.get(namePhone))
         || (!nameAddr.endsWith("_") && existingByNameAddress.get(nameAddr));
-      const existingIndustry = existingLead?.industry;
+      const existingIndustry = existingLead ? existingLead.industry : undefined;
 
       console.log("Lead industry resolution", {
         businessName: place.name,
@@ -628,11 +607,6 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      if (remainingSavedLeadSlots <= 0) {
-        skipped_due_to_saved_lead_limit++;
-        continue;
-      }
-      remainingSavedLeadSlots--;
 
       toInsert.push({
         user_id: user.id,

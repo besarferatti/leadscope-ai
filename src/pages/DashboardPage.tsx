@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Users,
   Search,
@@ -8,13 +8,12 @@ import {
   Plus,
   Shield,
   AlertTriangle,
-  Clock,
   BarChart3,
   Zap,
-  MessageSquare,
   RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CreditWallet } from '../components/CreditWallet';
 import { useAuth } from '../context/AuthContext';
 import { Lead, LeadSearch } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -23,9 +22,6 @@ import { formatDate } from '../lib/utils';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import {
   isAdmin,
-  getPlanLimits,
-  getTrialDaysLeft,
-  isTrialExpired,
   getPlanBadgeColor,
   PLANS,
 } from '../lib/plans';
@@ -60,46 +56,6 @@ interface Stats {
   interestedLeads: number;
 }
 
-function UsageBar({
-  label,
-  used,
-  limit,
-  icon: Icon,
-}: {
-  label: string;
-  used: number;
-  limit: number;
-  icon: React.ElementType;
-}) {
-  const pct = limit === -1 ? 0 : Math.min(100, Math.round((used / limit) * 100));
-  const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500';
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <Icon className="w-3.5 h-3.5" />
-          {label}
-        </div>
-        <span className="text-slate-300 text-xs font-medium">
-          {limit === -1
-            ? `${used.toLocaleString()} / ∞`
-            : `${used.toLocaleString()} / ${limit.toLocaleString()}`}
-        </span>
-      </div>
-
-      {limit !== -1 && (
-        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${color} rounded-full transition-all duration-500`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function DashboardPage({ onNavigate }: Props) {
   const { user, profile } = useAuth();
 
@@ -117,9 +73,6 @@ export function DashboardPage({ onNavigate }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const admin = isAdmin(profile);
-  const limits = getPlanLimits(profile);
-  const trialDays = getTrialDaysLeft(profile);
-  const trialExpired = isTrialExpired(profile);
   const planName = profile ? PLANS[profile.current_plan]?.name ?? profile.current_plan : '';
   const planBadge = profile ? getPlanBadgeColor(profile.current_plan) : '';
 
@@ -339,46 +292,6 @@ export function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
-      {!admin && trialExpired && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/25">
-          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium text-sm">Your free trial has ended.</p>
-            <p className="text-red-400/70 text-xs mt-0.5">
-              Upgrade your plan to continue generating leads, audits, and outreach messages.
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate('settings', { tab: 'billing' })}
-            className="btn-primary text-xs py-1.5 flex-shrink-0"
-          >
-            Upgrade Now
-          </button>
-        </div>
-      )}
-
-      {!admin && !trialExpired && profile?.current_plan === 'free_trial' && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/25">
-          <Zap className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-blue-300 font-medium text-sm">
-              {trialDays <= 3
-                ? `Only ${trialDays} day${trialDays !== 1 ? 's' : ''} left in your free trial!`
-                : `You're on the Free Trial — ${trialDays} days remaining.`}
-            </p>
-            <p className="text-blue-400/70 text-xs mt-0.5">
-              Choose a plan to unlock more leads, AI audits, and outreach messages.
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate('settings', { tab: 'billing' })}
-            className="btn-primary text-xs py-1.5 flex-shrink-0"
-          >
-            Choose a Plan
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-px rounded-xl overflow-hidden border border-slate-800 bg-slate-800">
         {statCards.map((card) => (
           <div key={card.label} className="bg-slate-900 p-5 sm:p-6">
@@ -396,7 +309,7 @@ export function DashboardPage({ onNavigate }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-[.8fr_1.1fr_1.1fr] gap-5">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-white font-semibold text-sm">Plan & Usage</h2>
+            <h2 className="text-white font-semibold text-sm">Credit wallet</h2>
             <span className={`badge text-xs ${planBadge}`}>{planName}</span>
           </div>
 
@@ -412,43 +325,10 @@ export function DashboardPage({ onNavigate }: Props) {
             </div>
           ) : (
             <div className="space-y-3">
-              <UsageBar
-                label="Leads"
-                used={profile?.leads_used_this_month ?? 0}
-                limit={limits.leadsLimit}
-                icon={Users}
-              />
-              <UsageBar
-                label="AI Audits"
-                used={profile?.audits_used_this_month ?? 0}
-                limit={limits.auditsLimit}
-                icon={BarChart3}
-              />
-              <UsageBar
-                label="Messages"
-                used={profile?.messages_used_this_month ?? 0}
-                limit={limits.messagesLimit}
-                icon={MessageSquare}
-              />
-
-              {profile?.current_plan === 'free_trial' && !trialExpired && (
-                <div className="flex items-center gap-2 pt-1">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <p className="text-amber-400 text-xs">
-                    {trialDays} day{trialDays !== 1 ? 's' : ''} left in trial
-                  </p>
-                </div>
-              )}
-
-              {profile?.current_plan !== 'agency' && profile?.current_plan !== 'enterprise' && (
-                <button
-                  onClick={() => onNavigate('settings', { tab: 'billing' })}
-                  className="btn-primary w-full text-xs py-2 mt-1"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  Upgrade Plan
-                </button>
-              )}
+              <CreditWallet compact />
+              <button onClick={() => onNavigate('settings', { tab: 'billing' })} className="btn-primary w-full text-xs">
+                <Zap className="w-3.5 h-3.5" /> Manage credits
+              </button>
             </div>
           )}
         </div>

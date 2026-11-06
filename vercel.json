@@ -7,7 +7,9 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "codex/production-readiness-foundation": false
+      "codex/production-readiness-foundation": false,
+      "codex/pro-credit-wallet": false,
+      "development": false
     }
   }
 }
