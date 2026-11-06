@@ -11,6 +11,8 @@ New subscriptions use the existing `STRIPE_PRO_MONTHLY` price. In staging, set t
 
 The configured price is charged once per started provider attempt, including attempts without results. An automatic discovery retry starts a new attempt. Stripe refunds and disputes require manual wallet reconciliation before production rollout.
 
+For a support correction, open **Admin → Users → Add credits**, confirm the recipient, and enter the amount and an internal reason. Manual credits never expire and are used after monthly credits. The wallet records the administrator and reason privately. The recipient sees an **Admin credit** entry. Retrying the same request cannot grant it twice.
+
 Local PostgreSQL 18.6 rehearsal passed all 33 migrations using fixtures for Supabase Auth and Storage. Two separate database sessions competed for a balance that could cover only one action. One debit succeeded, the other waited for the lock and returned insufficient credits, and the final balance was zero.
 
 In a temporary Stripe Sandbox, the application created and completed the $69 PRO Checkout and all four top-up Checkouts. The application webhook handler verified signed copies of the test events against a local wallet database. Replaying the events did not duplicate credits. The temporary sandbox key did not permit Stripe Test Clocks, so the real renewal and delivery to the hosted Supabase webhook still need staging verification.

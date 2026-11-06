@@ -53,7 +53,7 @@ export function CreditWallet({ compact = false }: { compact?: boolean }) {
             {balance.next_expiry && <p className="text-xs text-slate-400">Next expiry {new Date(balance.next_expiry).toLocaleDateString()}</p>}
           </div>
           <div className="rounded-lg bg-slate-800/60 p-3">
-            <p className="text-xs text-slate-400">Top-up credits</p>
+            <p className="text-xs text-slate-400">Non-expiring credits</p>
             <p className="text-lg font-semibold text-white">{balance.top_up.toLocaleString()}</p>
             <p className="text-xs text-slate-400">Never expire</p>
           </div>

@@ -43,6 +43,9 @@ const spend = async (action, id = randomUUID(), user = owner) => (await as('serv
   'SELECT spend_credits($1, $2, $3) AS result', [user, action, id]))[0].result;
 const setPrice = (credits, id = admin) => as('authenticated', id,
   "SELECT set_credit_price('website_analysis', $1)", [credits]);
+const adminGrant = (amount, reason, operation, actor = admin, target = other) =>
+  as('authenticated', actor, 'SELECT grant_admin_credits($1, $2, $3, $4) AS added',
+    [target, amount, reason, operation]);
 
 before(async () => {
   await db.exec(`
@@ -63,9 +66,8 @@ before(async () => {
     $$;
     GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
   `);
-  for (const name of (await readdir(migrations)).filter(name => name.endsWith('.sql') && name < walletMigration).sort()) {
-    await migrate(name);
-  }
+  const files = (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort();
+  for (const name of files.filter(name => name < walletMigration)) await migrate(name);
   for (const user of [owner, other, admin]) {
     await db.query('INSERT INTO auth.users (id, email) VALUES ($1, $2)', [user, user + '@example.invalid']);
   }
@@ -75,7 +77,7 @@ before(async () => {
     (checkout_session_id, payment_intent_id, customer_id, amount_subtotal, amount_total, currency, payment_status)
     VALUES ('old_session', 'old_intent', 'cus_owner', 900, 900, 'usd', 'paid'),
            ('old_session', 'old_intent', 'cus_owner', 900, 900, 'usd', 'paid')`);
-  await migrate(walletMigration);
+  for (const name of files.filter(name => name >= walletMigration)) await migrate(name);
 });
 after(async () => db.close());
 
@@ -147,4 +149,30 @@ test('an existing paid legacy subscription keeps included access until its perio
   await db.query("UPDATE stripe_subscriptions SET current_period_end = $1 WHERE customer_id = 'cus_other'", [epoch - 1]);
   assert.equal((await balance(other)).legacy_access, false);
   assert.equal(await spend('website_analysis', randomUUID(), other), 'insufficient');
+});
+
+test('admin credit is non-expiring, auditable, private, and safe to retry', async () => {
+  const operation = randomUUID();
+  assert.deepEqual(await adminGrant(7400, '  Renewal support  ', operation), [{ added: true }]);
+  assert.deepEqual(await adminGrant(7400, 'Renewal support', operation), [{ added: false }]);
+  await assert.rejects(adminGrant(7401, 'Renewal support', operation), { code: '22023' });
+  await assert.rejects(adminGrant(7400, 'Renewal support', operation, admin, owner), { code: '22023' });
+  assert.equal((await balance(other)).top_up, 7400);
+  const { rows } = await db.query('SELECT granted_by, grant_reason, expires_at FROM credit_grants WHERE source_key = $1', ['admin:' + operation]);
+  assert.deepEqual(rows, [{ granted_by: admin, grant_reason: 'Renewal support', expires_at: null }]);
+  const history = await as('authenticated', other, 'SELECT label, credits FROM get_credit_history()');
+  assert.deepEqual(history, [{ label: 'Admin credit', credits: 7400 }]);
+  assert.equal(await spend('lead_search', randomUUID(), other), 'charged');
+  assert.equal((await balance(other)).top_up, 7395);
+});
+
+test('only active admins can grant positive credits to a real user with a reason', async () => {
+  await assert.rejects(adminGrant(50, 'Support', randomUUID(), owner), { code: '42501' });
+  for (const [amount, reason] of [[0, 'Support'], [1000001, 'Support'], [50, ' '], [50, null]]) {
+    await assert.rejects(adminGrant(amount, reason, randomUUID()), { code: '22023' });
+  }
+  await assert.rejects(adminGrant(50, 'Support', randomUUID(), admin, randomUUID()), { code: 'P0002' });
+  await db.query('UPDATE user_profiles SET is_active = false WHERE id = $1', [admin]);
+  await assert.rejects(adminGrant(50, 'Support', randomUUID()), { code: '42501' });
+  assert.equal((await balance(other)).top_up, 7395);
 });
