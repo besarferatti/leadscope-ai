@@ -524,7 +524,7 @@ export function SettingsPage({ onNavigate, initialTab }: Props) {
               </div>
               <div className="card space-y-4 p-6">
                 <h2 className="font-semibold text-white">PRO subscription</h2>
-                <p className="text-sm text-slate-300">$69 per month · 7,400 credits each paid cycle</p>
+                <p className="text-sm text-slate-300">€69 per month · 7,400 credits each paid cycle</p>
                 <div className="flex flex-wrap gap-3">
                   {(profile?.current_plan === 'free_trial' ||
                     !['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete'].includes(profile?.subscription_status ?? '')) && (

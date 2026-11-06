@@ -71,7 +71,7 @@ export function CreditWallet({ compact = false }: { compact?: boolean }) {
             ))}
             <button disabled={checking} onClick={() => void load(true)} className="btn-secondary text-sm">Refresh wallet</button>
           </div>
-          <p className="text-sm text-slate-400">Monthly credits are used first. Credits are charged when a paid action starts, including attempts with no results.</p>
+          <p className="text-sm text-slate-400">Top-ups are charged in USD. Monthly credits are used first. Credits are charged when a paid action starts, including attempts with no results.</p>
           <div className="grid gap-5 md:grid-cols-2">
             <section>
               <h3 className="mb-2 font-medium text-white">Credits per action</h3>

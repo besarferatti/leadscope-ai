@@ -1,3 +1,6 @@
+-- Some existing Stripe installations predate subscription soft deletion.
+ALTER TABLE public.stripe_subscriptions ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
 CREATE TABLE public.credit_prices (
   action text PRIMARY KEY,
   label text NOT NULL,

@@ -39,7 +39,7 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
         )}
         <section className="card border-blue-500/40 p-6">
           <h2 className="text-xl font-semibold text-white">PRO</h2>
-          <p className="mt-2 text-3xl font-bold text-white">$69 <span className="text-sm font-normal text-slate-400">/ month</span></p>
+          <p className="mt-2 text-3xl font-bold text-white">€69 <span className="text-sm font-normal text-slate-400">/ month</span></p>
           <ul className="my-5 space-y-2 text-sm text-slate-300">
             <li className="flex gap-2"><Check size={16} className="text-emerald-400" /> 7,400 credits per billing cycle, including 500 bonus credits</li>
             <li className="flex gap-2"><Check size={16} className="text-emerald-400" /> Monthly credits expire at the end of the billing cycle</li>
@@ -52,7 +52,7 @@ export function PricingPage({ onGetStarted, onLogin, onBack, currentPlan, onSele
         </section>
         <section className="card p-6">
           <h2 className="font-semibold text-white">Wallet top-ups</h2>
-          <p className="mt-1 text-sm text-slate-400">Top-up credits never expire.</p>
+          <p className="mt-1 text-sm text-slate-400">Top-ups are charged in USD. These credits never expire.</p>
           <dl className="mt-3 space-y-2 text-sm text-slate-300">
             {TOP_UP_PACKS.map(pack => (
               <div className="flex justify-between" key={pack.cents}>

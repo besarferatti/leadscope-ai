@@ -11,7 +11,7 @@ const softwareApplicationSchema = {
   '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'LeadScope AI',
   applicationCategory: 'BusinessApplication', operatingSystem: 'Web',
   description: 'A lead discovery, qualification, audit, and outreach workspace for agencies and freelancers.',
-  offers: [{ '@type': 'Offer', name: 'PRO monthly', price: 69, priceCurrency: 'USD' }],
+  offers: [{ '@type': 'Offer', name: 'PRO monthly', price: 69, priceCurrency: 'EUR' }],
 };
 
 const workflow = [

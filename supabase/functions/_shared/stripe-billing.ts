@@ -4,6 +4,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 export const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!);
 export const billingDb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 export const proPriceId = Deno.env.get('STRIPE_PRO_MONTHLY');
+export const proCurrency = 'eur';
+export const proAmount = 6900;
 export const walletProduct = 'leadscope_credit_topup_v1';
 export const topUpAmounts = [1000, 2500, 5000, 10000];
 
@@ -13,13 +15,13 @@ export function stripeId(value: string | { id: string } | null | undefined) {
 
 export async function grantPaidInvoice(invoice: Stripe.Invoice, customer: string) {
   const subscription = stripeId(invoice.subscription);
-  if (!subscription || !proPriceId || invoice.status !== 'paid' || invoice.amount_paid <= 0 || invoice.currency !== 'usd'
+  if (!subscription || !proPriceId || invoice.status !== 'paid' || invoice.amount_paid <= 0 || invoice.currency !== proCurrency
       || !['subscription_create', 'subscription_cycle'].includes(invoice.billing_reason ?? '')) return;
 
   // Read the full line collection from the SDK's API version, independent of the event payload version.
   for await (const line of stripe.invoices.listLineItems(invoice.id)) {
     if (line.price?.id !== proPriceId || line.type !== 'subscription' || line.proration
-        || line.quantity !== 1 || line.amount !== 6900) continue;
+        || line.quantity !== 1 || line.amount !== proAmount) continue;
     const { error } = await billingDb.rpc('grant_monthly_credits', {
       p_customer: customer,
       p_subscription: subscription,

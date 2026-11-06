@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
 
 async function handleEvent(event: Stripe.Event) {
   switch (event.type) {
-    case 'invoice.paid': {
+    case 'invoice.paid':
+    case 'invoice.payment_succeeded': {
       const invoice = await stripe.invoices.retrieve(event.data.object.id);
       const customer = stripeId(invoice.customer);
       if (!customer || !invoice.subscription) return;

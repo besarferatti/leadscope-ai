@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import type Stripe from 'npm:stripe@17.7.0';
-import { billingDb, proPriceId, stripe, topUpAmounts, walletProduct } from '../_shared/stripe-billing.ts';
+import { billingDb, proAmount, proCurrency, proPriceId, stripe, topUpAmounts, walletProduct } from '../_shared/stripe-billing.ts';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -45,8 +45,10 @@ Deno.serve(async (req) => {
       const created = await stripe.customers.create({ metadata: { userId: user.id } },
         { idempotencyKey: 'leadscope-customer-' + user.id });
       const { error } = await billingDb.from('stripe_customers')
-        .upsert({ user_id: user.id, customer_id: created.id }, { onConflict: 'user_id', ignoreDuplicates: true });
-      if (error) throw error;
+        .insert({ user_id: user.id, customer_id: created.id });
+      // The live schema enforces one active mapping with a partial unique index.
+      // A concurrent insert can win, so read the current mapping on a conflict.
+      if (error && error.code !== '23505') throw error;
       const { data: saved, error: savedError } = await billingDb.from('stripe_customers')
         .select('customer_id').eq('user_id', user.id).is('deleted_at', null).single();
       if (savedError) throw savedError;
@@ -68,9 +70,9 @@ Deno.serve(async (req) => {
     }
 
     const price = await stripe.prices.retrieve(proPriceId!);
-    if (!price.active || price.currency !== 'usd' || price.unit_amount !== 6900
+    if (!price.active || price.currency !== proCurrency || price.unit_amount !== proAmount
         || price.recurring?.interval !== 'month' || price.recurring.interval_count !== 1) {
-      throw new Error('STRIPE_PRO_MONTHLY must reference the existing $69 USD monthly price.');
+      throw new Error('STRIPE_PRO_MONTHLY must reference the existing €69 monthly price.');
     }
 
     let previous: Stripe.Checkout.Session | undefined;

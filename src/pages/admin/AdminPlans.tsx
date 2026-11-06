@@ -37,7 +37,7 @@ export function AdminPlans() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Plans and credit prices</h1>
-        <p className="mt-1 text-sm text-slate-400">PRO costs $69 per month and includes 7,400 credits. Price changes apply to future actions.</p>
+        <p className="mt-1 text-sm text-slate-400">PRO costs €69 per month and includes 7,400 credits. Price changes apply to future actions.</p>
       </div>
       {message && <p role="status" className="text-sm text-slate-300">{message}</p>}
       <div className="card divide-y divide-slate-800 px-5">
