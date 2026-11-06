@@ -166,6 +166,21 @@ test('admin credit is non-expiring, auditable, private, and safe to retry', asyn
   assert.equal((await balance(other)).top_up, 7395);
 });
 
+test('only active admins can read a bounded page of current user credit balances', async () => {
+  const query = 'SELECT * FROM get_admin_user_credit_balances($1::uuid[])';
+  const ids = [[owner, other, admin, other]];
+  await db.query("INSERT INTO credit_grants (source_key, user_id, amount, remaining, expires_at) VALUES ('monthly:fixture', $1, 7400, 7000, now() + interval '1 day')", [other]);
+  const rows = await as('authenticated', admin, query, ids);
+  const balances = new Map(rows.map(row => [row.user_id, row]));
+  assert.equal(rows.length, 3);
+  assert.deepEqual(balances.get(admin), { user_id: admin, monthly: 0, non_expiring: 0 });
+  assert.deepEqual(balances.get(other), { user_id: other, monthly: 7000, non_expiring: 7395 });
+  assert.deepEqual(balances.get(owner), { user_id: owner, monthly: 0, non_expiring: 20575 });
+  await assert.rejects(as('authenticated', owner, query, ids), { code: '42501' });
+  await assert.rejects(as('anon', owner, query, ids), { code: '42501' });
+  await assert.rejects(as('authenticated', admin, query, [Array(101).fill(owner)]), { code: '22023' });
+});
+
 test('only active admins can grant positive credits to a real user with a reason', async () => {
   await assert.rejects(adminGrant(50, 'Support', randomUUID(), owner), { code: '42501' });
   for (const [amount, reason] of [[0, 'Support'], [1000001, 'Support'], [50, ' '], [50, null]]) {
@@ -174,5 +189,6 @@ test('only active admins can grant positive credits to a real user with a reason
   await assert.rejects(adminGrant(50, 'Support', randomUUID(), admin, randomUUID()), { code: 'P0002' });
   await db.query('UPDATE user_profiles SET is_active = false WHERE id = $1', [admin]);
   await assert.rejects(adminGrant(50, 'Support', randomUUID()), { code: '42501' });
+  await assert.rejects(as('authenticated', admin, 'SELECT * FROM get_admin_user_credit_balances($1::uuid[])', [[owner]]), { code: '42501' });
   assert.equal((await balance(other)).top_up, 7395);
 });

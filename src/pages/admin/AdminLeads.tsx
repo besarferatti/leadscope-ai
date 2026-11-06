@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Trash2, ChevronRight, Search, X, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Lead } from '../../types';
@@ -8,38 +8,52 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { ScoreBadge } from '../../components/ui/ScoreBadge';
 import { UserProfile } from '../../lib/plans';
 import { LEAD_STATUSES } from '../../lib/utils';
+import { AdminPagination } from './AdminPagination';
+import { useAdminPage } from './useAdminPage';
 
 interface Props {
   onNavigate?: (page: string, params?: Record<string, string>) => void;
 }
 
 export function AdminLeads({ onNavigate }: Props) {
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterUser, setFilterUser] = useState('');
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [ownersError, setOwnersError] = useState('');
+  const load = useCallback((from: number, to: number) => {
+    let request = supabase.from('leads').select('*', { count: 'exact' });
+    if (filterStatus) request = request.eq('status', filterStatus);
+    if (filterUser) request = request.eq('user_id', filterUser);
+    if (search) {
+      const pattern = JSON.stringify('%' + search.replace(/[\\%_]/g, '\\$&') + '%');
+      request = request.or('business_name.ilike.' + pattern + ',location.ilike.' + pattern);
+    }
+    return request.order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(from, to).returns<Lead[]>();
+  }, [filterStatus, filterUser, search]);
+  const { rows: leads, total, page, setPage, loading, error, setError, refresh } = useAdminPage(load);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const value = query.trim();
+    if (value === search) return;
+    const timer = window.setTimeout(() => { setPage(0); setSearch(value); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query, search, setPage]);
 
-  async function load() {
-    setLoading(true);
-    const [leadsRes, usersRes] = await Promise.all([
-      supabase.from('leads').select('*').order('created_at', { ascending: false }),
-      supabase.from('user_profiles').select('id, email, full_name'),
-    ]);
-    setLeads(leadsRes.data ?? []);
-    setUsers((usersRes.data ?? []) as UserProfile[]);
-    setLoading(false);
-  }
+  useEffect(() => {
+    void supabase.from('user_profiles').select('id,email').order('email').then(({ data, error }) => {
+      if (error) setOwnersError(error.message);
+      else setUsers((data ?? []) as UserProfile[]);
+    });
+  }, []);
 
   async function handleDelete(id: string) {
     const { error: err } = await supabase.from('leads').delete().eq('id', id);
     if (err) setError(err.message);
-    else setLeads(prev => prev.filter(l => l.id !== id));
+    else refresh();
     setDeleteId(null);
   }
 
@@ -48,45 +62,34 @@ export function AdminLeads({ onNavigate }: Props) {
     return u?.email ?? userId.slice(0, 8);
   }
 
-  const filtered = leads.filter(l => {
-    if (filterStatus && l.status !== filterStatus) return false;
-    if (filterUser && l.user_id !== filterUser) return false;
-    if (query) {
-      const q = query.toLowerCase();
-      return l.business_name.toLowerCase().includes(q) || l.location.toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  if (loading) return <LoadingSpinner message="Loading leads..." />;
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">All Leads</h1>
-        <p className="text-slate-400 text-sm mt-1">{leads.length} total leads across all users</p>
+        <p className="text-slate-400 text-sm mt-1">{total.toLocaleString()} {search || filterStatus || filterUser ? 'matching leads' : 'total leads across all users'}</p>
       </div>
 
       {error && <ErrorAlert message={error} onClose={() => setError('')} />}
+      {ownersError && <ErrorAlert message={ownersError} onClose={() => setOwnersError('')} />}
 
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input className="input pl-9" placeholder="Search leads..." value={query} onChange={e => setQuery(e.target.value)} />
-          {query && <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-3.5 h-3.5" /></button>}
+          {query && <button type="button" aria-label="Clear search" onClick={() => { setQuery(''); setPage(0); setSearch(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-3.5 h-3.5" /></button>}
         </div>
-        <select className="select w-auto" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+        <select className="select w-auto" value={filterStatus} onChange={e => { setPage(0); setFilterStatus(e.target.value); }}>
           <option value="">All Statuses</option>
           {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select className="select w-auto" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+        <select className="select w-auto" value={filterUser} onChange={e => { setPage(0); setFilterUser(e.target.value); }}>
           <option value="">All Users</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
         </select>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        {loading ? <LoadingSpinner message="Loading leads..." /> : <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800">
@@ -99,7 +102,8 @@ export function AdminLeads({ onNavigate }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {filtered.map(lead => (
+              {!leads.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No leads found.</td></tr>}
+              {leads.map(lead => (
                 <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors group">
                   <td className="px-4 py-3">
                     <div className="font-medium text-slate-200 truncate max-w-[160px]">{lead.business_name}</div>
@@ -132,10 +136,8 @@ export function AdminLeads({ onNavigate }: Props) {
               ))}
             </tbody>
           </table>
-        </div>
-        <div className="px-4 py-3 border-t border-slate-800 text-slate-500 text-xs">
-          Showing {filtered.length} of {leads.length} leads
-        </div>
+        </div>}
+        <AdminPagination page={page} total={total} onPage={setPage} loading={loading} />
       </div>
 
       {deleteId && (
