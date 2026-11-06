@@ -1,82 +1,34 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { UserProfile } from '../../lib/plans';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { formatDate } from '../../lib/utils';
+import { AdminPagination } from './AdminPagination';
+import { loadAdminOwnerEmails, useAdminPage } from './useAdminPage';
 
 interface AuditRow {
   id: string;
-  lead_id: string;
-  user_id?: string;
+  lead: { business_name: string; user_id: string | null; lead_score: number | null } | null;
   website_score: number | null;
   seo_score: number | null;
   conversion_score: number | null;
-  lead_score: number | null;
   created_at: string;
 }
 
-interface LeadRow {
-  id: string;
-  business_name: string;
-  user_id?: string | null;
+async function loadPage(from: number, to: number) {
+  const result = await supabase.from('lead_audits').select('id,website_score,seo_score,conversion_score,created_at,lead:leads(business_name,user_id,lead_score)', { count: 'exact' })
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to).returns<AuditRow[]>();
+  if (result.error) return { data: null, count: result.count, error: result.error };
+  const rows = result.data ?? [];
+  const owners = await loadAdminOwnerEmails(rows.map(row => row.lead?.user_id));
+  return {
+    count: result.count,
+    error: null,
+    data: rows.map(row => ({ ...row, owner: row.lead?.user_id ? owners.get(row.lead.user_id) ?? row.lead.user_id.slice(0, 8) : 'Unknown owner' })),
+  };
 }
 
 export function AdminAudits() {
-  const [audits, setAudits] = useState<AuditRow[]>([]);
-  const [leads, setLeads] = useState<LeadRow[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [auditsRes, leadsRes] = await Promise.all([
-          supabase.from('lead_audits').select('*').order('created_at', { ascending: false }),
-          supabase.from('leads').select('id, business_name, user_id'),
-        ]);
-
-        if (auditsRes.error) throw auditsRes.error;
-        if (leadsRes.error) throw leadsRes.error;
-
-        const auditRows = (auditsRes.data ?? []) as AuditRow[];
-        const leadRows = (leadsRes.data ?? []) as LeadRow[];
-        const userIds = [...new Set(leadRows.map(l => l.user_id).filter((id): id is string => Boolean(id)))];
-        const usersRes = userIds.length
-          ? await supabase.from('user_profiles').select('id, email').in('id', userIds)
-          : { data: [], error: null };
-
-        if (usersRes.error) setError(usersRes.error.message);
-
-        setAudits(auditRows);
-        setLeads(leadRows);
-        setUsers((usersRes.data ?? []) as UserProfile[]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load audits.');
-        setAudits([]);
-        setLeads([]);
-        setUsers([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
-
-  function getBusinessName(leadId: string) {
-    return leads.find(l => l.id === leadId)?.business_name ?? '—';
-  }
-
-  function getOwnerEmail(leadId: string) {
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead?.user_id) return 'Unknown owner';
-
-    return users.find(u => u.id === lead.user_id)?.email ?? lead.user_id.slice(0, 8);
-  }
+  const { rows: audits, page, total, setPage, loading, error, setError } = useAdminPage(loadPage);
 
   function scoreCell(score: number | null) {
     if (score === null) return <span className="text-slate-600">—</span>;
@@ -90,7 +42,7 @@ export function AdminAudits() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">AI Audits</h1>
-        <p className="text-slate-400 text-sm mt-1">{audits.length} total audits</p>
+        <p className="text-slate-400 text-sm mt-1">{total.toLocaleString()} total audits</p>
       </div>
 
       {error && <ErrorAlert message={error} onClose={() => setError('')} />}
@@ -116,18 +68,19 @@ export function AdminAudits() {
                 </tr>
               ) : audits.map(a => (
                 <tr key={a.id} className="hover:bg-slate-800/30">
-                  <td className="px-4 py-3 text-slate-200 font-medium truncate max-w-[160px]">{getBusinessName(a.lead_id)}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell">{getOwnerEmail(a.lead_id)}</td>
+                  <td className="px-4 py-3 text-slate-200 font-medium truncate max-w-[160px]">{a.lead?.business_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs hidden md:table-cell">{a.owner}</td>
                   <td className="px-4 py-3 hidden sm:table-cell">{scoreCell(a.website_score)}</td>
                   <td className="px-4 py-3 hidden sm:table-cell">{scoreCell(a.seo_score)}</td>
                   <td className="px-4 py-3 hidden lg:table-cell">{scoreCell(a.conversion_score)}</td>
-                  <td className="px-4 py-3">{scoreCell(a.lead_score)}</td>
+                  <td className="px-4 py-3">{scoreCell(a.lead?.lead_score ?? null)}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs hidden sm:table-cell">{formatDate(a.created_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <AdminPagination page={page} total={total} onPage={setPage} loading={loading} />
       </div>
     </div>
   );

@@ -1,21 +1,33 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { RefreshCw, UserX, UserCheck, Trash2, Key, ChevronDown, Coins } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { formatDate } from '../../lib/utils';
 import { getPlanBadgeColor, getSubscriptionStatusColor, PLANS, CHANGEABLE_PLANS, UserProfile, PlanId } from '../../lib/plans';
+import { AdminPagination } from './AdminPagination';
+import { useAdminPage } from './useAdminPage';
 
-type AdminUserRow = UserProfile;
+type CreditBalance = { user_id: string; monthly: number; non_expiring: number };
+type AdminUserRow = UserProfile & { balance?: CreditBalance };
+
+async function loadUsers(from: number, to: number) {
+  const result = await supabase.from('user_profiles').select('*', { count: 'exact' })
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, to).returns<UserProfile[]>();
+  const profiles = result.data ?? [];
+  if (result.error || !profiles.length) return { ...result, data: profiles as AdminUserRow[] };
+  const { data } = await supabase.rpc('get_admin_user_credit_balances', { p_user_ids: profiles.map(user => user.id) });
+  const balances = new Map((Array.isArray(data) ? data as CreditBalance[] : []).map(balance => [balance.user_id, balance]));
+  return { ...result, data: profiles.map(user => ({ ...user, balance: balances.get(user.id) })) };
+}
 
 interface EditModal {
   user: AdminUserRow;
 }
 
 export function AdminUsers() {
-  const [users, setUsers] = useState<AdminUserRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { rows: users, page, total, setPage, loading, error, setError, refresh } = useAdminPage(loadUsers);
   const [success, setSuccess] = useState('');
   const [editModal, setEditModal] = useState<EditModal | null>(null);
   const [grant, setGrant] = useState<{
@@ -30,19 +42,6 @@ export function AdminUsers() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    const { data, error: err } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (err) setError(err.message);
-    else setUsers((data ?? []) as AdminUserRow[]);
-    setLoading(false);
-  }
-
   function showSuccess(msg: string) {
     setSuccess(msg);
     setTimeout(() => setSuccess(''), 3000);
@@ -55,7 +54,7 @@ export function AdminUsers() {
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', userId);
     if (err) setError(err.message);
-    else { showSuccess('User updated.'); await load(); }
+    else { showSuccess('User updated.'); refresh(); }
     setActionLoading(null);
     setEditModal(null);
   }
@@ -64,7 +63,7 @@ export function AdminUsers() {
     setActionLoading(userId);
     const { error: err } = await supabase.from('user_profiles').delete().eq('id', userId);
     if (err) setError(err.message);
-    else { showSuccess('User deleted.'); setUsers(prev => prev.filter(u => u.id !== userId)); }
+    else { showSuccess('User deleted.'); refresh(); }
     setActionLoading(null);
     setDeleteConfirm(null);
   }
@@ -107,6 +106,7 @@ export function AdminUsers() {
       showSuccess(data ? amount.toLocaleString() + ' credits added to ' + grant.user.email + '.'
         : 'This grant was already recorded for ' + grant.user.email + '.');
       setGrant(null);
+      refresh();
     } catch {
       setGrantError('Could not verify the grant. Retry to check the same request.');
     } finally {
@@ -120,7 +120,7 @@ export function AdminUsers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Users</h1>
-        <p className="text-slate-400 text-sm mt-1">{users.length} total users</p>
+        <p className="text-slate-400 text-sm mt-1">{total.toLocaleString()} total users</p>
       </div>
 
       {error && <ErrorAlert message={error} onClose={() => setError('')} />}
@@ -137,6 +137,7 @@ export function AdminUsers() {
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden md:table-cell">Role</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Plan</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden xl:table-cell">Usage</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium">Credits</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden lg:table-cell">Status</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium hidden sm:table-cell">Joined</th>
                 <th className="text-right px-4 py-3 text-slate-400 font-medium">Actions</th>
@@ -166,6 +167,14 @@ export function AdminUsers() {
                       <div>Audits: {u.audits_used_this_month}</div>
                       <div>Msgs: {u.messages_used_this_month}</div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs whitespace-nowrap">
+                    {u.balance ? (
+                      <>
+                        <div className="text-slate-200 font-medium">{(u.balance.monthly + u.balance.non_expiring).toLocaleString()}</div>
+                        <div className="text-slate-500">{u.balance.monthly.toLocaleString()} monthly · {u.balance.non_expiring.toLocaleString()} non-expiring</div>
+                      </>
+                    ) : <span className="text-slate-500">Unavailable</span>}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
                     <span className={`badge text-xs ${getSubscriptionStatusColor(u.subscription_status)}`}>
@@ -223,6 +232,7 @@ export function AdminUsers() {
             </tbody>
           </table>
         </div>
+        <AdminPagination page={page} total={total} onPage={setPage} loading={loading} />
       </div>
 
       {grant && (

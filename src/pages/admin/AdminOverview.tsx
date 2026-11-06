@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Users, Search, FileText, MessageSquare, TrendingUp, UserCheck, Zap, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { PLANS, type PlanId } from '../../lib/plans';
 
 interface AdminStats {
@@ -36,23 +37,31 @@ function formatCurrency(value: number) {
 export function AdminOverview() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-      const [usersRes, leadsRes, auditsRes, messagesRes] = await Promise.all([
+      const totals = { count: 'exact' as const, head: true };
+      const [usersRes, leadsRes, auditsRes, messagesRes, monthlyLeads, monthlyAudits, monthlyMessages] = await Promise.all([
         supabase.from('user_profiles').select('current_plan, billing_cycle, subscription_status, is_active, role'),
-        supabase.from('leads').select('created_at'),
-        supabase.from('lead_audits').select('created_at'),
-        supabase.from('outreach_messages').select('created_at'),
+        supabase.from('leads').select('id', totals),
+        supabase.from('lead_audits').select('id', totals),
+        supabase.from('outreach_messages').select('id', totals),
+        supabase.from('leads').select('id', totals).gte('created_at', monthStart),
+        supabase.from('lead_audits').select('id', totals).gte('created_at', monthStart),
+        supabase.from('outreach_messages').select('id', totals).gte('created_at', monthStart),
       ]);
 
+      const failed = [usersRes, leadsRes, auditsRes, messagesRes, monthlyLeads, monthlyAudits, monthlyMessages].find(result => result.error);
+      if (failed?.error) {
+        setError(failed.error.message);
+        setLoading(false);
+        return;
+      }
       const users = usersRes.data ?? [];
-      const leads = leadsRes.data ?? [];
-      const audits = auditsRes.data ?? [];
-      const messages = messagesRes.data ?? [];
 
       const activePaidUsers = users.filter(user => (
         user.subscription_status === 'active' &&
@@ -79,12 +88,12 @@ export function AdminOverview() {
         estimatedMRR,
         estimatedARR: estimatedMRR * 12,
         averageRevenuePerPaidUser: activePaidUsers.length > 0 ? estimatedMRR / activePaidUsers.length : 0,
-        totalLeads: leads.length,
-        totalAudits: audits.length,
-        totalMessages: messages.length,
-        leadsThisMonth: leads.filter(l => l.created_at >= monthStart).length,
-        auditsThisMonth: audits.filter(a => a.created_at >= monthStart).length,
-        messagesThisMonth: messages.filter(m => m.created_at >= monthStart).length,
+        totalLeads: leadsRes.count ?? 0,
+        totalAudits: auditsRes.count ?? 0,
+        totalMessages: messagesRes.count ?? 0,
+        leadsThisMonth: monthlyLeads.count ?? 0,
+        auditsThisMonth: monthlyAudits.count ?? 0,
+        messagesThisMonth: monthlyMessages.count ?? 0,
       });
       setLoading(false);
     }
@@ -92,6 +101,7 @@ export function AdminOverview() {
   }, []);
 
   if (loading) return <LoadingSpinner message="Loading stats..." />;
+  if (error) return <ErrorAlert message={error} />;
   if (!stats) return null;
 
   const cards = [
