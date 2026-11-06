@@ -1,14 +1,11 @@
-type CreditAction = 'lead_search' | 'website_analysis' | 'website_preview'
-  | 'email_generation' | 'dm_generation' | 'email_send' | 'email_discovery';
+/** @typedef {'lead_search' | 'website_analysis' | 'website_preview' | 'email_generation' | 'dm_generation' | 'email_send' | 'email_discovery'} CreditAction */
 
-type WalletClient = {
-  rpc: (
-    name: 'spend_credits',
-    args: { p_user: string; p_action: CreditAction; p_operation: string },
-  ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
-};
-
-export async function chargeCredits(client: WalletClient, userId: string, action: CreditAction) {
+/**
+ * @param {{rpc: (name: 'spend_credits', args: {p_user: string, p_action: CreditAction, p_operation: string}) => PromiseLike<{data: unknown, error: {message: string} | null}>}} client
+ * @param {string} userId
+ * @param {CreditAction} action
+ */
+export async function chargeCredits(client, userId, action) {
   const { data, error } = await client.rpc('spend_credits', {
     p_user: userId,
     p_action: action,
