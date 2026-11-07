@@ -196,7 +196,7 @@ export function SharedAuditReportPage({ token }: Props) {
           </section>
         )}
 
-        {seoPack && (
+        {seoPack && !seoPack.scan_issue_offer && (
           <section className="rounded-2xl bg-white border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
             <div className="flex items-center gap-2">
               <Search className="w-5 h-5 text-purple-600" />

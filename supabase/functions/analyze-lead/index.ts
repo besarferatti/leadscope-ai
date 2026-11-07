@@ -2,6 +2,7 @@ import { chargeCredits } from '../_shared/credits.js';
 import { requestWebsiteScan } from './scanner-client.ts';
 import { unavailableEvidence, verifiedIssues, type WebsiteEvidence } from "./website-evidence.ts";
 import { browserEvidenceForPrompt, runBrowserChecks } from "./browser-checks.ts";
+import { certificateServiceOffer } from "./certificate-service-offer.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -51,7 +52,6 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return errorResponse("Missing Authorization Bearer token", 401);
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
-    if (!openaiApiKey) return errorResponse("OpenAI API key is not configured on the server.", 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -78,10 +78,33 @@ Deno.serve(async (req: Request) => {
     const browserChecks = browserUrl
       ? await runBrowserChecks(browserUrl, Deno.env.get("PAGESPEED_API_KEY")?.trim() ?? "")
       : [];
+    const certificateOffer = websiteEvidence.status === "unavailable" ? certificateServiceOffer(websiteEvidence.reason) : null;
+    if (certificateOffer) {
+      const values = {
+        lead_id,
+        website_score: null, seo_score: null, conversion_score: null,
+        main_issues: [certificateOffer.finding],
+        recommended_offer: certificateOffer.service_name,
+        personalization_angle: certificateOffer.pitch,
+        summary: certificateOffer.summary,
+        seo_content_pack: { website_evidence: websiteEvidence, browser_checks: browserChecks, scan_issue_offer: certificateOffer },
+      };
+      const { data: previous, error: readError } = await serviceClient.from("lead_audits")
+        .select("id,seo_content_pack").eq("lead_id", lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (readError) return errorResponse("Could not read the previous audit.", 500);
+      const previousFinding = previous?.seo_content_pack?.scan_issue_offer?.finding;
+      const write = previousFinding
+        ? await serviceClient.from("lead_audits").update(values).eq("id", previous.id)
+          .contains("seo_content_pack", { scan_issue_offer: { finding: previousFinding } }).select("*").maybeSingle()
+        : await serviceClient.from("lead_audits").insert(values).select("*").single();
+      if (write.error || !write.data) return errorResponse("Could not save the certificate finding. Please retry.", 500);
+      return jsonResponse({ audit: write.data, credits_used: 0 });
+    }
     if (websiteEvidence.status === "unavailable" && !browserChecks.some((check) => check.status === "measured")) {
       const browserReasons = [...new Set(browserChecks.flatMap((check) => check.status === "unavailable" ? [check.reason] : []))];
       return errorResponse([`Website scan unavailable. ${websiteEvidence.reason}`, ...browserReasons, "No credits were used."].join(" "), 422);
     }
+    if (!openaiApiKey) return errorResponse("OpenAI API key is not configured on the server.", 500);
     const creditError = await chargeCredits(serviceClient, user.id, "website_analysis");
     if (creditError) return errorResponse(creditError.message, creditError.status);
 
