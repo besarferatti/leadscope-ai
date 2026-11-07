@@ -31,26 +31,18 @@ function jsonResponse(data: unknown, status = 200) { return new Response(JSON.st
 function errorResponse(message: string, status = 400) { return jsonResponse({ error: message }, status); }
 function isAdmin(profile: UserProfile) { return profile.role === "admin"; }
 function cleanJson(content: string) { return content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim(); }
-function normalizeWebsiteUrl(rawUrl: string): URL | null {
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return null;
-  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+async function scanWebsite(leadId: string, authorization: string): Promise<{ evidence: WebsiteEvidence; browserUrl?: string }> {
   try {
-    const url = new URL(candidate);
-    return url.protocol === "http:" || url.protocol === "https:" ? url : null;
-  } catch {
-    return null;
-  }
-}
-async function scanWebsite(rawUrl: string, signingKey: string): Promise<{ evidence: WebsiteEvidence; browserUrl?: string }> {
-  const url = normalizeWebsiteUrl(rawUrl);
-  if (!url) return { evidence: unavailableEvidence(rawUrl ? "Invalid website URL." : "No website URL was provided.") };
-  try {
-    const page = await requestWebsiteScan(url.toString(), signingKey, Deno.env.get("WEBSITE_SCANNER_URL")?.trim() || undefined);
+    const page = await requestWebsiteScan(leadId, authorization, Deno.env.get("WEBSITE_SCANNER_URL")?.trim() || undefined);
     if ("reason" in page) return { evidence: unavailableEvidence(page.reason), browserUrl: page.browserUrl };
     return page;
-  } catch {
-    return { evidence: unavailableEvidence("The website scanner service could not complete the request.") };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const safeMessage = /^(Scanner (?:authorization was rejected|could not access the lead|returned HTTP \d{3}|returned an invalid response|endpoint configuration is invalid)\.)$/.test(message)
+      ? message
+      : error instanceof Error && error.name === "TimeoutError" ? "Scanner service timed out." : "Scanner service could not be reached.";
+    console.warn("Website scanner:", safeMessage);
+    return { evidence: unavailableEvidence(safeMessage) };
   }
 }
 Deno.serve(async (req: Request) => {
@@ -82,7 +74,7 @@ Deno.serve(async (req: Request) => {
     if (!isAdmin(typedProfile) && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
 
-    const { evidence: websiteEvidence, browserUrl } = await scanWebsite(typedLead.website ?? "", serviceKey);
+    const { evidence: websiteEvidence, browserUrl } = await scanWebsite(lead_id, authHeader);
     const browserChecks = browserUrl
       ? await runBrowserChecks(browserUrl, Deno.env.get("PAGESPEED_API_KEY")?.trim() ?? "")
       : [];

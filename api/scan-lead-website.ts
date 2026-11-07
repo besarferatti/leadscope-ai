@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 import { fetchPublicHtml, validatePublicWebsite } from '../supabase/functions/_shared/public-website.js';
 import { readWebsiteEvidence } from '../supabase/functions/analyze-lead/website-evidence.js';
 
@@ -9,23 +9,35 @@ export default async function handler(req: Request, res: Response) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
 
+  const auth = req.headers.authorization;
+  const token = typeof auth === 'string' ? /^Bearer\s+(\S+)$/i.exec(auth)?.[1] : undefined;
+  if (!token) return res.status(401).json({ error: 'Unauthorized scanner request.' });
+  const { leadId } = (req.body ?? {}) as { leadId?: unknown };
+  if (typeof leadId !== 'string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(leadId)) {
+    return res.status(400).json({ error: 'A valid lead ID is required.' });
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const signature = req.headers['x-scan-signature'];
-  const { url, timestamp } = (req.body ?? {}) as { url?: unknown; timestamp?: unknown };
-  if (!key || typeof signature !== 'string' || !/^[a-f0-9]{64}$/.test(signature) ||
-      typeof url !== 'string' || url.length > 2048 || typeof timestamp !== 'number' ||
-      !Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > 60_000) {
-    return res.status(401).json({ error: 'Unauthorized scanner request.' });
-  }
+  if (!supabaseUrl || !key) return res.status(503).json({ error: 'Scanner authorization is not configured.' });
+  const admin = createClient(supabaseUrl, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: { user }, error: authError } = await admin.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Scanner session could not be verified.' });
+  const { data: profile, error: profileError } = await admin.from('user_profiles').select('role,is_active').eq('id', user.id).maybeSingle();
+  if (profileError) return res.status(503).json({ error: 'Scanner could not check account access.' });
+  if (!profile?.is_active) return res.status(403).json({ error: 'An active account is required.' });
 
-  const expected = createHmac('sha256', key).update(JSON.stringify(['lead-website-scan-v1', timestamp, url])).digest();
-  if (!timingSafeEqual(expected, Buffer.from(signature, 'hex'))) {
-    return res.status(401).json({ error: 'Unauthorized scanner request.' });
-  }
+  const leadQuery = admin.from('leads').select('website').eq('id', leadId);
+  if (profile.role !== 'admin') leadQuery.eq('user_id', user.id);
+  const { data: lead, error: leadError } = await leadQuery.maybeSingle();
+  if (leadError) return res.status(503).json({ error: 'Scanner could not read the lead.' });
+  if (!lead) return res.status(404).json({ error: 'Lead not found.' });
 
+  const rawUrl = lead.website?.trim();
+  if (!rawUrl) return res.status(200).json({ reason: 'No website URL was provided.' });
   let page: URL;
   try {
-    page = new URL(url);
+    page = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
     await validatePublicWebsite(page, AbortSignal.timeout(2_000));
   } catch {
     return res.status(200).json({ reason: 'The website address could not be verified as public.' });
