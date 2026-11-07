@@ -732,7 +732,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   {auditLoading ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</>
                   ) : (
-                    <><Zap className="w-3.5 h-3.5" /> {audit ? 'Re-analyze' : 'Analyze Website'}</>
+                    <><Zap className="w-3.5 h-3.5" /> {audit ? 'Re-analyze' : 'Analyze Lead'}</>
                   )}
                 </button>
               </div>
@@ -773,6 +773,41 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   </section>
                 )}
                 {!evidence && <p className="text-amber-300 text-sm">Older audit. Re-analyze to collect website evidence.</p>}
+
+                {!!seoPack?.browser_checks?.length && (
+                  <section className="bg-slate-800/50 rounded-xl p-4">
+                    <h3 className="text-white font-medium text-sm">Redesign evidence</h3>
+                    <p className="text-slate-400 text-xs mt-1">Simulated browser check of this page. Navigation, contact and booking flows need a separate review.</p>
+                    <div className="grid sm:grid-cols-2 gap-4 mt-3">
+                      {seoPack.browser_checks.map(check => (
+                        <div key={check.device} className="rounded-lg bg-slate-900/50 p-3">
+                          <h4 className="capitalize text-slate-200 text-sm font-medium">{check.device}</h4>
+                          {check.status === 'unavailable' ? (
+                            <p className="text-amber-300 text-xs mt-2">{check.reason}</p>
+                          ) : (
+                            <>
+                              {check.screenshot && (
+                                <img className="w-full max-h-72 object-contain object-top mt-2 rounded" src={check.screenshot} alt={check.device + ' browser preview'} loading="lazy" />
+                              )}
+                              <dl className="space-y-1 text-xs text-slate-300 mt-2">
+                                {check.performance !== null && <div><dt className="inline">Lighthouse performance </dt><dd className="inline">{check.performance}/100</dd></div>}
+                                {check.lcpMs !== null && <div><dt className="inline">Largest content paint </dt><dd className="inline">{(check.lcpMs / 1000).toFixed(1)} s</dd></div>}
+                                {check.cls !== null && <div><dt className="inline">Layout shift </dt><dd className="inline">{check.cls.toFixed(3)}</dd></div>}
+                              </dl>
+                              {check.diagnostics.length > 0 && (
+                                <ul className="mt-2 pl-4 list-disc text-sm text-amber-200">
+                                  {check.diagnostics.map(item => (
+                                    <li key={item.label}>{item.label}{item.detail && ' — ' + item.detail}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 {evidence?.status !== 'unavailable' && (
                   <>
@@ -969,7 +1004,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   <Zap className="w-6 h-6 text-slate-500" />
                 </div>
                 <p className="text-slate-400 text-sm mb-1">No audit yet</p>
-                <p className="text-slate-600 text-xs">Click "Analyze Website" to generate an AI audit with lead score, issues, and recommended offer.</p>
+                <p className="text-slate-600 text-xs">Click "Analyze Lead" to check website evidence, browser measurements, and service opportunities.</p>
               </div>
             )}
           </div>

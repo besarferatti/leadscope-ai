@@ -37,7 +37,10 @@ function cleanJson(content: string) { return content.replace(/^```(?:json)?\s*/i
 
 function sanitizePublicReport(report: SharedAuditReport): SharedAuditReport {
   const seoContentPack = report.seo_content_pack ? { ...report.seo_content_pack } : null;
-  if (seoContentPack) delete seoContentPack.suggested_pricing;
+  if (seoContentPack) {
+    delete seoContentPack.suggested_pricing;
+    delete seoContentPack.browser_checks;
+  }
 
   return {
     business_name: report.business_name,

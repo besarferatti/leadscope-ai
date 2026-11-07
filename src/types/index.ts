@@ -67,6 +67,18 @@ type AuditWebsiteEvidence = {
   robots: string;
 } | { status: 'unavailable'; reason: string };
 
+type AuditBrowserCheck =
+  | { device: 'mobile' | 'desktop'; status: 'unavailable'; reason: string }
+  | {
+    device: 'mobile' | 'desktop';
+    status: 'measured';
+    performance: number | null;
+    lcpMs: number | null;
+    cls: number | null;
+    screenshot?: string;
+    diagnostics: { label: string; detail?: string }[];
+  };
+
 export interface SeoContentPack {
   suggested_keywords: {
     primary: string[];
@@ -91,6 +103,7 @@ export interface SeoContentPack {
     deliverables: string[];
   };
   website_evidence?: AuditWebsiteEvidence;
+  browser_checks?: AuditBrowserCheck[];
   suggested_pricing: {
     market_detected: string;
     one_time_setup: string;
@@ -190,7 +203,7 @@ export interface SmtpSettings {
 export type { UserProfile } from '../lib/plans';
 
 
-export type PublicSeoContentPack = Omit<SeoContentPack, 'suggested_pricing'>;
+export type PublicSeoContentPack = Omit<SeoContentPack, 'suggested_pricing' | 'browser_checks'>;
 
 export interface SharedAuditReport {
   business_name: string;
