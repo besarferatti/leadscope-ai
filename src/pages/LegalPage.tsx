@@ -4,7 +4,7 @@ import { SEO } from '../components/SEO';
 const privacySections = [
   {
     title: 'Who we are',
-    text: 'LeadScope AI is a service for finding business prospects, auditing websites, generating reports and previews, and preparing and sending outreach. For questions about this policy or your personal data, use the support email below.',
+    text: 'Lead Scope LLC operates LeadScope AI, a service for finding business prospects, auditing websites, generating reports and previews, and preparing and sending outreach. For questions about this policy or your personal data, use the support email below.',
   },
   {
     title: 'Information we collect',
@@ -39,7 +39,7 @@ const privacySections = [
 const termsSections = [
   {
     title: 'Using LeadScope AI',
-    text: 'These terms apply to your use of LeadScope AI, including lead discovery, saved leads, website audits, reports, previews, and outreach tools. By using the service, you agree to these terms. If you use the service for an organization, you must have authority to act for it.',
+    text: 'These terms are an agreement between you and Lead Scope LLC, the operator of LeadScope AI. They apply to lead discovery, saved leads, website audits, reports, previews, and outreach tools. By using the service, you agree to these terms. If you use the service for an organization, you must have authority to act for it.',
   },
   {
     title: 'Your account',
