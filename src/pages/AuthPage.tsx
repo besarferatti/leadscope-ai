@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Eye, EyeOff, Mail, Lock, User, ArrowLeft, CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { createGoogleOAuthClient, supabase } from '../lib/supabase';
+import { startGoogleSignIn } from '../lib/googleOAuth';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { BrandLogo } from '../components/BrandLogo';
 import { trackEvent } from '../lib/analytics';
@@ -26,9 +27,18 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
   const [signupComplete, setSignupComplete] = useState(false);
+
+  useEffect(() => {
+    function resetGoogleLoading(event: PageTransitionEvent) {
+      if (event.persisted) setGoogleLoading(false);
+    }
+    window.addEventListener('pageshow', resetGoogleLoading);
+    return () => window.removeEventListener('pageshow', resetGoogleLoading);
+  }, []);
 
   function switchMode(m: 'login' | 'register') {
     setMode(m);
@@ -37,8 +47,22 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
     onModeChange(m);
   }
 
+  async function handleGoogleSignIn() {
+    setGoogleLoading(true);
+    setError('');
+    try {
+      const { error } = await startGoogleSignIn(createGoogleOAuthClient().auth, window.location.origin);
+      if (!error) return;
+    } catch {
+      // Keep provider and storage details out of user-facing errors.
+    }
+    setError('Could not start Google sign-in. Please try again.');
+    setGoogleLoading(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (googleLoading) return;
     setLoading(true);
     setError('');
 
@@ -181,6 +205,15 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading || googleLoading}
+                className="btn-secondary w-full"
+              >
+                {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+              </button>
+              <p className="text-center text-xs text-slate-400">or continue with email</p>
               {mode === 'register' && (
                 <div>
                   <label className="block text-slate-300 text-sm font-medium mb-1.5">Full Name</label>
@@ -218,13 +251,13 @@ export function AuthPage({ mode: initialMode, onModeChange, onBack, onSuccess }:
 
               {mode === 'login' && (
                 <div className="text-right -mt-2">
-                  <button type="button" onClick={() => setMode('forgot-password')} className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
+                <button type="button" disabled={googleLoading} onClick={() => setMode('forgot-password')} className="text-blue-400 hover:text-blue-300 text-xs transition-colors">
                     Forgot password?
                   </button>
                 </div>
               )}
 
-              <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
+              <button type="submit" disabled={loading || googleLoading} className="btn-primary w-full py-2.5">
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
