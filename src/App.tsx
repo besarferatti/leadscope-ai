@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, X, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './pages/AuthPage';
@@ -491,6 +492,7 @@ function App() {
   return (
     <AuthProvider>
       <AppInner />
+      <Analytics />
     </AuthProvider>
   );
 }
