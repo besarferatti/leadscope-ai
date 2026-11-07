@@ -65,6 +65,13 @@ type AuditWebsiteEvidence = {
   viewport: boolean;
   canonical: boolean;
   robots: string;
+  structure?: {
+    h2Count: number;
+    language: string;
+    imagesWithoutAlt: number;
+    forms: number;
+    contactLinks: number;
+  };
 } | { status: 'unavailable'; reason: string };
 
 type AuditBrowserCheck =

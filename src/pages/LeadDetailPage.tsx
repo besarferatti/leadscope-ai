@@ -744,7 +744,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                   <section className="bg-slate-800/50 rounded-xl p-4">
                     <h3 className="text-white font-medium text-sm">Website evidence</h3>
                     {evidence.status === 'unavailable' ? (
-                      <p className="text-amber-300 text-sm mt-2">Scan unavailable. {evidence.reason}</p>
+                      <p className="text-amber-300 text-sm mt-2">{seoPack?.browser_checks?.some(check => check.status === 'measured') ? 'Partial audit. HTML scan unavailable.' : 'Scan unavailable.'} {evidence.reason}</p>
                     ) : (
                       <>
                         <p className="text-slate-400 text-xs mt-1 break-all">{evidence.url}</p>
@@ -757,6 +757,13 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                             ['Mobile viewport tag', evidence.viewport ? 'Detected' : missingSignal],
                             ['Canonical tag', evidence.canonical ? 'Detected' : missingSignal],
                             ['Robots meta directive', evidence.robots || missingSignal],
+                            ...(evidence.structure ? [
+                              ['H2 headings', String(evidence.structure.h2Count)],
+                              ['Page language', evidence.structure.language || missingSignal],
+                              ['Images without alt attribute', String(evidence.structure.imagesWithoutAlt)],
+                              ['Forms found', String(evidence.structure.forms)],
+                              ['Contact or booking links found', String(evidence.structure.contactLinks)],
+                            ] : []),
                           ].map(([label, value]) => (
                             <div key={label}>
                               <dt className="text-slate-400">{label}</dt>

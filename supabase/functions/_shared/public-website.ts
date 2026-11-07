@@ -6,7 +6,6 @@ import { checkServerIdentity } from "node:tls";
 
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 const maxRedirects = 5;
-const maxBytes = 60_000;
 
 function isPublicAddress(address: string): boolean {
   if (isIP(address) === 4) {
@@ -76,10 +75,14 @@ function requestPage(url: URL, address: string, signal: AbortSignal): Promise<In
   });
 }
 
+export async function validatePublicWebsite(url: URL, signal: AbortSignal): Promise<void> {
+  await resolvePublicAddress(url, signal, lookup);
+}
+
 export async function fetchPublicHtml(
   initialUrl: URL,
   signal: AbortSignal,
-  { resolve = lookup, open = requestPage } = {},
+  { resolve = lookup, open = requestPage, maxBytes = 60_000 } = {},
 ): Promise<{ html: string; url: string; truncated: boolean }> {
   let url = initialUrl;
   for (let redirects = 0; ; redirects++) {
