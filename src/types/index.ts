@@ -53,6 +53,32 @@ export interface Lead {
   created_at: string;
 }
 
+type WebsiteProjectEstimate = { one_time_project: string; scope: string };
+
+type AuditWebsiteEvidence = {
+  status: 'complete' | 'partial';
+  url: string;
+  https: boolean;
+  title: string;
+  description: string;
+  headings: string[];
+  viewport: boolean;
+  canonical: boolean;
+  robots: string;
+} | { status: 'unavailable'; reason: string };
+
+type AuditBrowserCheck =
+  | { device: 'mobile' | 'desktop'; status: 'unavailable'; reason: string }
+  | {
+    device: 'mobile' | 'desktop';
+    status: 'measured';
+    performance: number | null;
+    lcpMs: number | null;
+    cls: number | null;
+    screenshot?: string;
+    diagnostics: { label: string; detail?: string }[];
+  };
+
 export interface SeoContentPack {
   suggested_keywords: {
     primary: string[];
@@ -76,21 +102,25 @@ export interface SeoContentPack {
     why_sell_this: string;
     deliverables: string[];
   };
+  website_evidence?: AuditWebsiteEvidence;
+  browser_checks?: AuditBrowserCheck[];
   suggested_pricing: {
     market_detected: string;
     one_time_setup: string;
     monthly_retainer: string;
     currency: string;
     pricing_reason: string;
+    web_design?: WebsiteProjectEstimate;
+    web_redesign?: WebsiteProjectEstimate;
   };
 }
 
 export interface LeadAudit {
   id: string;
   lead_id: string;
-  website_score: number;
-  seo_score: number;
-  conversion_score: number;
+  website_score: number | null;
+  seo_score: number | null;
+  conversion_score: number | null;
   main_issues: string[];
   recommended_offer: string;
   personalization_angle: string;
@@ -173,16 +203,16 @@ export interface SmtpSettings {
 export type { UserProfile } from '../lib/plans';
 
 
-export type PublicSeoContentPack = Omit<SeoContentPack, 'suggested_pricing'>;
+export type PublicSeoContentPack = Omit<SeoContentPack, 'suggested_pricing' | 'browser_checks'>;
 
 export interface SharedAuditReport {
   business_name: string;
   website: string;
   location: string;
   lead_score: number | null;
-  website_score: number;
-  seo_score: number;
-  conversion_score: number;
+  website_score: number | null;
+  seo_score: number | null;
+  conversion_score: number | null;
   main_issues: string[];
   recommended_offer: string;
   personalization_angle: string;

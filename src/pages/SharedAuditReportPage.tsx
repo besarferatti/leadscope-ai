@@ -155,9 +155,9 @@ export function SharedAuditReportPage({ token }: Props) {
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ScoreCard label={t.website} score={report.website_score} icon={Globe} />
-          <ScoreCard label={t.seo} score={report.seo_score} icon={BarChart3} />
-          <ScoreCard label={t.conversion} score={report.conversion_score} icon={Megaphone} />
+          {report.website_score !== null && <ScoreCard label={t.website} score={report.website_score} icon={Globe} />}
+          {report.seo_score !== null && <ScoreCard label={t.seo} score={report.seo_score} icon={BarChart3} />}
+          {report.conversion_score !== null && <ScoreCard label={t.conversion} score={report.conversion_score} icon={Megaphone} />}
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
