@@ -59,6 +59,8 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
   const [noteSaveError, setNoteSaveError] = useState('');
   const [noteSaved, setNoteSaved] = useState(false);
   const seoPack = audit?.seo_content_pack;
+  const evidence = seoPack?.website_evidence;
+  const missingSignal = evidence?.status === 'partial' ? 'Unverified in partial scan' : 'Not detected in downloaded HTML';
 
   // Outreach form
   const [msgChannel, setMsgChannel] = useState<'email' | 'dm'>('email');
@@ -738,38 +740,80 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
             {audit ? (
               <div className="p-5 space-y-5">
-                {/* Score bars */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Website', score: audit.website_score, icon: Globe },
-                    { label: 'SEO', score: audit.seo_score, icon: BarChart3 },
-                    { label: 'Conversion', score: audit.conversion_score, icon: Megaphone },
-                  ].map(item => (
-                    <div key={item.label} className="bg-slate-800/50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <item.icon className="w-4 h-4 text-slate-400" />
-                        <span className="text-slate-400 text-xs font-medium uppercase tracking-wider">{item.label}</span>
-                      </div>
-                      <div className="flex items-end gap-2 mb-2">
-                        <span className={`text-3xl font-black ${getScoreColor(item.score)}`}>{item.score}</span>
-                        <span className="text-slate-600 text-sm mb-1">/100</span>
-                      </div>
-                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${getScoreBg(item.score)} rounded-full`}
-                          style={{ width: `${item.score}%` }}
-                        />
-                      </div>
+                {evidence && (
+                  <section className="bg-slate-800/50 rounded-xl p-4">
+                    <h3 className="text-white font-medium text-sm">Website evidence</h3>
+                    {evidence.status === 'unavailable' ? (
+                      <p className="text-amber-300 text-sm mt-2">Scan unavailable. {evidence.reason}</p>
+                    ) : (
+                      <>
+                        <p className="text-slate-400 text-xs mt-1 break-all">{evidence.url}</p>
+                        <dl className="grid sm:grid-cols-2 gap-3 mt-3 text-sm">
+                          {[
+                            ['Connection', evidence.https ? 'HTTPS' : 'HTTP'],
+                            ['HTML title', evidence.title || missingSignal],
+                            ['Meta description', evidence.description || missingSignal],
+                            ['H1', evidence.headings.filter(Boolean).join(' · ') || missingSignal],
+                            ['Mobile viewport tag', evidence.viewport ? 'Detected' : missingSignal],
+                            ['Canonical tag', evidence.canonical ? 'Detected' : missingSignal],
+                            ['Robots meta directive', evidence.robots || missingSignal],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <dt className="text-slate-400">{label}</dt>
+                              <dd className="text-slate-200 break-words">{value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <p className="text-slate-400 text-xs mt-3">
+                          {evidence.status === 'partial' ? 'Partial HTML download. ' : ''}
+                          Single-page HTML scan. Performance, rendered layout and Google indexing were not measured.
+                        </p>
+                      </>
+                    )}
+                  </section>
+                )}
+                {!evidence && <p className="text-amber-300 text-sm">Older audit. Re-analyze to collect website evidence.</p>}
+
+                {evidence?.status !== 'unavailable' && (
+                  <>
+                    <p className="text-slate-400 text-xs">Estimated scores</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {[
+                        { label: 'Website', score: audit.website_score, icon: Globe },
+                        { label: 'SEO', score: audit.seo_score, icon: BarChart3 },
+                        { label: 'Conversion', score: audit.conversion_score, icon: Megaphone },
+                      ].map(item => {
+                        const { score } = item;
+                        if (score === null) return null;
+                        return (
+                          <div key={item.label} className="bg-slate-800/50 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <item.icon className="w-4 h-4 text-slate-400" />
+                              <span className="text-slate-400 text-xs font-medium uppercase tracking-wider">{item.label}</span>
+                            </div>
+                            <div className="flex items-end gap-2 mb-2">
+                              <span className={`text-3xl font-black ${getScoreColor(score)}`}>{score}</span>
+                              <span className="text-slate-600 text-sm mb-1">/100</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${getScoreBg(score)} rounded-full`}
+                                style={{ width: `${score}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
 
                 {/* Issues */}
                 {audit.main_issues.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <AlertCircle className="w-4 h-4 text-amber-400" />
-                      <h3 className="text-white font-medium text-sm">Main Issues</h3>
+                      <h3 className="text-white font-medium text-sm">{evidence ? 'Technical findings' : 'Previous findings'}</h3>
                     </div>
                     <ul className="space-y-2">
                       {audit.main_issues.map((issue, i) => (
@@ -887,7 +931,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                     <div className="bg-slate-900/40 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <DollarSign className="w-3.5 h-3.5 text-purple-300" />
-                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">Suggested pricing</p>
+                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">Estimated SEO pricing</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
                         <p><span className="text-slate-500">Market:</span> <span className="text-slate-200">{seoPack.suggested_pricing?.market_detected}</span></p>
@@ -897,6 +941,17 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                       </div>
                       <p className="text-slate-400 text-xs mt-2">{seoPack.suggested_pricing?.pricing_reason}</p>
                     </div>
+                    {[
+                      { label: 'New website design', estimate: seoPack.suggested_pricing?.web_design },
+                      { label: 'Website redesign', estimate: seoPack.suggested_pricing?.web_redesign },
+                    ].map(({ label, estimate }) => estimate && (
+                      <div key={label} className="bg-slate-900/40 rounded-lg p-3">
+                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">{label}</p>
+                        <p className="text-slate-200 text-sm mt-2">One-time estimate {estimate.one_time_project} {seoPack.suggested_pricing?.currency}</p>
+                        <p className="text-slate-400 text-xs mt-2">{estimate.scope}</p>
+                      </div>
+                    ))}
+                    <p className="text-slate-400 text-xs">Planning estimates. Confirm the scope before quoting.</p>
                   </div>
                 )}
 

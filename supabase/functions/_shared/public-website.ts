@@ -80,7 +80,7 @@ export async function fetchPublicHtml(
   initialUrl: URL,
   signal: AbortSignal,
   { resolve = lookup, open = requestPage } = {},
-): Promise<{ html: string; url: string }> {
+): Promise<{ html: string; url: string; truncated: boolean }> {
   let url = initialUrl;
   for (let redirects = 0; ; redirects++) {
     const address = await resolvePublicAddress(url, signal, resolve);
@@ -108,7 +108,7 @@ export async function fetchPublicHtml(
         size += bytes.length;
         if (size >= maxBytes) break;
       }
-      return { html: html + decoder.decode(), url: url.toString() };
+      return { html: html + decoder.decode(), url: url.toString(), truncated: size >= maxBytes };
     } finally {
       response.destroy();
     }

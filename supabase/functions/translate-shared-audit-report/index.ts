@@ -14,9 +14,9 @@ type SharedAuditReport = {
   website: string;
   location: string;
   lead_score: number | null;
-  website_score: number;
-  seo_score: number;
-  conversion_score: number;
+  website_score: number | null;
+  seo_score: number | null;
+  conversion_score: number | null;
   main_issues: string[];
   recommended_offer: string;
   personalization_angle: string;
