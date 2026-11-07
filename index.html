@@ -4,14 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/public/leadscope-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-C9K9QRW2PG"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-C9K9QRW2PG', {
-        debug_mode: true
-      });
+      // OAuth callback URLs contain a short-lived authorization code.
+      if (window.location.pathname !== '/auth/callback') {
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag('js', new Date());
+        window.gtag('config', 'G-C9K9QRW2PG', { debug_mode: true });
+
+        const analytics = document.createElement('script');
+        analytics.async = true;
+        analytics.src = 'https://www.googletagmanager.com/gtag/js?id=G-C9K9QRW2PG';
+        document.head.append(analytics);
+      }
     </script>
     <title>LeadScope AI - Lead Generation, AI Audits, and Website Preview Links for Agencies</title>
     <meta name="description" content="Find local business leads, audit websites, generate SEO opportunities, create shareable audit reports, preview website concepts, and send better outreach with LeadScope AI." />
