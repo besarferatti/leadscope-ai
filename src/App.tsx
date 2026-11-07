@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CheckCircle, X, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './pages/LandingPage';
+import { LegalPage } from './pages/LegalPage';
 import { AuthPage } from './pages/AuthPage';
 import { PricingPage } from './pages/PricingPage';
 import { FAQPage } from './pages/FAQPage';
@@ -487,6 +488,10 @@ function AppInner() {
 }
 
 function App() {
+  const path = window.location.pathname.replace(/\/$/, '');
+  if (path === '/privacy') return <LegalPage kind="privacy" />;
+  if (path === '/terms') return <LegalPage kind="terms" />;
+
   return (
     <AuthProvider>
       <AppInner />
