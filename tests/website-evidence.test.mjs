@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readWebsiteEvidence, unavailableEvidence, verifiedIssues } from '../supabase/functions/analyze-lead/website-evidence.ts';
 
+test('extracts page structure without mistaking decorative images or scripts for missing content', () => {
+  const evidence = readWebsiteEvidence(
+    '<html lang=en><h2>Services</h2><img alt=""><img src="product.jpg">' +
+    '<script>const fake = "<form></form>";</script><form><a href="tel:+12125550100">Call</a></form>' +
+    '<a href="/contact">Contact</a><a href="/about">About</a></html>',
+    'https://example.com', false,
+  );
+  assert.deepEqual(evidence.structure, { h2Count: 1, language: 'en', imagesWithoutAlt: 1, forms: 1, contactLinks: 2 });
+});
+
 test('recognizes real homepage signals and verifies HTTPS on the final URL', () => {
   const evidence = readWebsiteEvidence(
     '<title>Wedding Bands | NYC Wholesale Diamonds</title>' +

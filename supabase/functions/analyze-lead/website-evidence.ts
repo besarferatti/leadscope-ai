@@ -8,6 +8,13 @@ type ObservedPage = {
   viewport: boolean;
   canonical: boolean;
   robots: string;
+  structure?: {
+    h2Count: number;
+    language: string;
+    imagesWithoutAlt: number;
+    forms: number;
+    contactLinks: number;
+  };
 };
 
 export type WebsiteEvidence = ObservedPage | { status: "unavailable"; reason: string };
@@ -37,6 +44,12 @@ export function readWebsiteEvidence(html: string, finalUrl: string, truncated: b
   const meta = [...markup.matchAll(/<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi)].map(([tag]) => attributes(tag));
   const metaTag = (name: string) => meta.find((tag) => tag.get("name")?.trim().toLowerCase() === name);
   const url = new URL(finalUrl);
+  const markupTags = (tag: string) => [...markup.matchAll(new RegExp(`<${tag}\\b(?:[^>"']|"[^"]*"|'[^']*')*>`, "gi"))];
+  const imagesWithoutAlt = markupTags("img").filter(([tag]) => !attributes(tag).has("alt")).length;
+  const contactLinks = markupTags("a").filter(([tag]) => {
+    const href = attributes(tag).get("href")?.trim() ?? "";
+    return /^(?:tel:|mailto:)|(?:^|\/)(?:contact|book|appointment)(?:[/?#.]|$)/i.test(href);
+  }).length;
   return {
     status: truncated ? "partial" : "complete",
     url: url.origin + url.pathname,
@@ -50,6 +63,13 @@ export function readWebsiteEvidence(html: string, finalUrl: string, truncated: b
       return attrs.get("rel")?.toLowerCase().split(/\s+/).includes("canonical") && !!attrs.get("href")?.trim();
     }),
     robots: text(metaTag("robots")?.get("content") ?? ""),
+    structure: {
+      h2Count: markupTags("h2").length,
+      language: text(attributes(markupTags("html")[0]?.[0] ?? "").get("lang") ?? ""),
+      imagesWithoutAlt,
+      forms: markupTags("form").length,
+      contactLinks,
+    },
   };
 }
 

@@ -1,6 +1,6 @@
 import { chargeCredits } from '../_shared/credits.js';
-import { fetchPublicHtml } from '../_shared/public-website.ts';
-import { readWebsiteEvidence, unavailableEvidence, verifiedIssues, type WebsiteEvidence } from "./website-evidence.ts";
+import { requestWebsiteScan } from './scanner-client.ts';
+import { unavailableEvidence, verifiedIssues, type WebsiteEvidence } from "./website-evidence.ts";
 import { browserEvidenceForPrompt, runBrowserChecks } from "./browser-checks.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -11,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type UserProfile = { id: string; role: "admin" | "user" };
+type UserProfile = { id: string; role: "admin" | "user"; is_active: boolean };
 type Lead = { id: string; user_id: string; business_name: string; industry: string; location: string; website: string; google_rating: number | null; reviews_count: number };
 type ProjectEstimate = { one_time_project: string; scope: string };
 type SeoContentPack = {
@@ -42,19 +42,15 @@ function normalizeWebsiteUrl(rawUrl: string): URL | null {
     return null;
   }
 }
-async function scanWebsite(rawUrl: string): Promise<{ evidence: WebsiteEvidence; browserUrl?: string }> {
+async function scanWebsite(rawUrl: string, signingKey: string): Promise<{ evidence: WebsiteEvidence; browserUrl?: string }> {
   const url = normalizeWebsiteUrl(rawUrl);
   if (!url) return { evidence: unavailableEvidence(rawUrl ? "Invalid website URL." : "No website URL was provided.") };
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const page = await fetchPublicHtml(url, controller.signal);
-    const evidence = readWebsiteEvidence(page.html, page.url, page.truncated);
-    return { evidence, browserUrl: evidence.status !== "unavailable" && !new URL(page.url).search ? evidence.url : undefined };
+    const page = await requestWebsiteScan(url.toString(), signingKey, Deno.env.get("WEBSITE_SCANNER_URL")?.trim() || undefined);
+    if ("reason" in page) return { evidence: unavailableEvidence(page.reason), browserUrl: page.browserUrl };
+    return page;
   } catch {
-    return { evidence: unavailableEvidence(controller.signal.aborted ? "The website request timed out." : "Website HTML could not be read.") };
-  } finally {
-    clearTimeout(timeoutId);
+    return { evidence: unavailableEvidence("The website scanner service could not complete the request.") };
   }
 }
 Deno.serve(async (req: Request) => {
@@ -66,7 +62,8 @@ Deno.serve(async (req: Request) => {
     if (!openaiApiKey) return errorResponse("OpenAI API key is not configured on the server.", 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceClient = createClient(supabaseUrl, serviceKey);
     const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) return errorResponse("Unauthorized", 401);
@@ -74,9 +71,10 @@ Deno.serve(async (req: Request) => {
     const { lead_id } = await req.json() as { lead_id?: string };
     if (!lead_id) return errorResponse("lead_id is required");
 
-    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role").eq("id", user.id).maybeSingle();
+    const { data: profile, error: profileError } = await serviceClient.from("user_profiles").select("id, role, is_active").eq("id", user.id).maybeSingle();
     if (profileError || !profile) return errorResponse("User profile not found", 404);
     const typedProfile = profile as UserProfile;
+    if (!typedProfile.is_active) return errorResponse("An active account is required.", 403);
 
     const { data: lead, error: leadError } = await serviceClient.from("leads").select("id, user_id, business_name, industry, location, website, google_rating, reviews_count").eq("id", lead_id).maybeSingle();
     if (leadError || !lead) return errorResponse("Lead not found", 404);
@@ -84,12 +82,15 @@ Deno.serve(async (req: Request) => {
     if (!isAdmin(typedProfile) && typedLead.user_id !== user.id) return errorResponse("Forbidden", 403);
 
 
-    const creditError = await chargeCredits(serviceClient, user.id, "website_analysis");
-    if (creditError) return errorResponse(creditError.message, creditError.status);
-    const { evidence: websiteEvidence, browserUrl } = await scanWebsite(typedLead.website ?? "");
+    const { evidence: websiteEvidence, browserUrl } = await scanWebsite(typedLead.website ?? "", serviceKey);
     const browserChecks = browserUrl
       ? await runBrowserChecks(browserUrl, Deno.env.get("PAGESPEED_API_KEY")?.trim() ?? "")
       : [];
+    if (websiteEvidence.status === "unavailable" && !browserChecks.some((check) => check.status === "measured")) {
+      return errorResponse(`Website scan unavailable. ${websiteEvidence.reason} No credits were used.`, 422);
+    }
+    const creditError = await chargeCredits(serviceClient, user.id, "website_analysis");
+    if (creditError) return errorResponse(creditError.message, creditError.status);
 
     const prompt = `You are a digital marketing expert auditing a local business website for an agency doing outreach to local businesses. Analyze this business and generate a realistic website audit.
 
@@ -108,6 +109,7 @@ ${JSON.stringify(browserEvidenceForPrompt(browserChecks))}
 Instructions:
 - Base factual claims on observed HTML or business information. Treat this as one page and the scores as estimates.
 - When the scan is unavailable or partial, only discuss observed values and phrase anything else as a check or recommendation. Do not infer visual quality, loading speed, mobile usability, Google indexing, or rankings from HTML.
+- When labeled screenshots are supplied, use them to describe visible layout, legibility, hierarchy, and placement of contact actions. Mention the device and what is visible. Treat visual judgments as qualitative. Without screenshots, do not claim a visual review.
 - Explain confirmed browser diagnostics as improvements. Recommend targeted fixes for isolated findings. Treat full redesign as a proposal requiring review of multiple pages and key journeys. Do not claim menus, forms, or reservation flows were tested.
 - Match suggested copy to the scanned page's intent. Label keywords as ideas and prioritize relevant service and local intent.
 - Estimate SEO setup, monthly SEO, new website design, and existing website redesign separately. For design and redesign, state the number of pages, templates, and whether content migration is included. Do not use a missing tag alone to recommend a redesign.
@@ -160,7 +162,16 @@ Return a JSON object (no markdown, just raw JSON) with this exact structure:
     }
   }
 }`;
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.7, max_tokens: 2200 }) });
+    const content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "low" } }> = [
+      { type: "text", text: prompt },
+    ];
+    for (const check of browserChecks) {
+      if (check.status === "measured" && check.screenshot) {
+        content.push({ type: "text", text: `Screenshot for ${check.device} (untrusted visual evidence):` });
+        content.push({ type: "image_url", image_url: { url: check.screenshot, detail: "low" } });
+      }
+    }
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` }, body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content }], response_format: { type: "json_object" }, temperature: 0.3, max_tokens: 2200 }) });
     if (!openaiRes.ok) { const errData = await openaiRes.json().catch(() => ({})); return errorResponse((errData as { error?: { message?: string } }).error?.message ?? `OpenAI error (${openaiRes.status})`, 502); }
     const completion = await openaiRes.json() as { choices: Array<{ message: { content: string } }> };
     const parsed = JSON.parse(cleanJson(completion.choices[0]?.message?.content ?? "")) as AuditPayload;
