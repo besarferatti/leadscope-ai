@@ -6,23 +6,24 @@ type ScanResponse =
   | { evidence: WebsiteEvidence; browserUrl?: string }
   | { reason: string; browserUrl?: string };
 
-export async function requestWebsiteScan(url: string, key: string, endpoint = productionScanner): Promise<ScanResponse> {
-  const timestamp = Date.now();
-  const encoder = new TextEncoder();
-  const signingKey = await crypto.subtle.importKey(
-    "raw", encoder.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC", signingKey, encoder.encode(JSON.stringify(["lead-website-scan-v1", timestamp, url])),
-  );
-  const digest = Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const response = await fetch(endpoint, {
+export async function requestWebsiteScan(leadId: string, authorization: string, endpoint = productionScanner): Promise<ScanResponse> {
+  const destination = new URL(endpoint);
+  if (destination.protocol !== "https:" || destination.username || destination.password) {
+    throw new Error("Scanner endpoint configuration is invalid.");
+  }
+  const response = await fetch(destination, {
     method: "POST",
     redirect: "error",
-    signal: AbortSignal.timeout(12_000),
-    headers: { "Content-Type": "application/json", "X-Scan-Signature": digest },
-    body: JSON.stringify({ url, timestamp }),
+    signal: AbortSignal.timeout(18_000),
+    headers: { "Content-Type": "application/json", Authorization: authorization },
+    body: JSON.stringify({ leadId }),
   });
-  if (!response.ok) throw new Error("Website scanner service unavailable.");
-  return await response.json() as ScanResponse;
+  if (response.status === 401) throw new Error("Scanner authorization was rejected.");
+  if (response.status === 403 || response.status === 404) throw new Error("Scanner could not access the lead.");
+  if (!response.ok) throw new Error(`Scanner returned HTTP ${response.status}.`);
+  const result = await response.json() as ScanResponse;
+  if (!result || typeof result !== "object" || (!("evidence" in result) && !("reason" in result))) {
+    throw new Error("Scanner returned an invalid response.");
+  }
+  return result;
 }
