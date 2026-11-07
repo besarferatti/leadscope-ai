@@ -79,7 +79,8 @@ Deno.serve(async (req: Request) => {
       ? await runBrowserChecks(browserUrl, Deno.env.get("PAGESPEED_API_KEY")?.trim() ?? "")
       : [];
     if (websiteEvidence.status === "unavailable" && !browserChecks.some((check) => check.status === "measured")) {
-      return errorResponse(`Website scan unavailable. ${websiteEvidence.reason} No credits were used.`, 422);
+      const browserReasons = [...new Set(browserChecks.flatMap((check) => check.status === "unavailable" ? [check.reason] : []))];
+      return errorResponse([`Website scan unavailable. ${websiteEvidence.reason}`, ...browserReasons, "No credits were used."].join(" "), 422);
     }
     const creditError = await chargeCredits(serviceClient, user.id, "website_analysis");
     if (creditError) return errorResponse(creditError.message, creditError.status);

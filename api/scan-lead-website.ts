@@ -52,8 +52,15 @@ export default async function handler(req: Request, res: Response) {
     return res.status(200).json({ evidence, browserUrl });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
+    const code = error instanceof Error && 'code' in error ? error.code : undefined;
     const status = message.match(/^Website returned HTTP (\d{3})\.$/)?.[1];
     const reason = signal.aborted ? 'The website took too long to respond.'
+      : code === 'CERT_HAS_EXPIRED' ? 'The website HTTPS certificate has expired.'
+      : code === 'ERR_TLS_CERT_ALTNAME_INVALID' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+        code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || code === 'SELF_SIGNED_CERT_IN_CHAIN'
+        ? 'The website HTTPS certificate could not be verified.'
+      : code === 'ENOTFOUND' || code === 'EAI_AGAIN' ? 'The website domain could not be resolved.'
+      : code === 'ECONNREFUSED' || code === 'ECONNRESET' ? 'The website closed or refused the connection.'
       : status ? `The website returned HTTP ${status}.`
       : message === 'Website response was not HTML.' ? 'The address did not return an HTML page.'
       : 'The website HTML could not be read.';
