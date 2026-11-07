@@ -109,6 +109,7 @@ export interface SeoContentPack {
     why_sell_this: string;
     deliverables: string[];
   };
+  scan_issue_offer?: { service_name: string; finding: string; pitch: string; deliverables: string[]; summary: string };
   website_evidence?: AuditWebsiteEvidence;
   browser_checks?: AuditBrowserCheck[];
   suggested_pricing: {

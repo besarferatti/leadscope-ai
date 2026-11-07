@@ -740,6 +740,15 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
 
             {audit ? (
               <div className="p-5 space-y-5">
+                {seoPack?.scan_issue_offer && (
+                  <section className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                    <h3 className="text-amber-200 font-medium text-sm">Service opportunity found</h3>
+                    <p className="text-slate-300 text-sm mt-2">A certificate problem was detected. The full website audit is incomplete. No credits were used.</p>
+                    <ul className="list-disc pl-4 text-slate-300 text-sm mt-2 space-y-1">
+                      {seoPack.scan_issue_offer.deliverables.map(item => <li key={item}>{item}</li>)}
+                    </ul>
+                  </section>
+                )}
                 {evidence && (
                   <section className="bg-slate-800/50 rounded-xl p-4">
                     <h3 className="text-white font-medium text-sm">Website evidence</h3>
@@ -893,7 +902,7 @@ export function LeadDetailPage({ leadId, onBack, onNavigate }: Props) {
                 )}
 
                 {/* SEO & Content Opportunities */}
-                {seoPack && (
+                {seoPack && !seoPack.scan_issue_offer && (
                   <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 space-y-4">
                     <div className="flex items-center gap-2">
                       <Search className="w-4 h-4 text-purple-300" />
